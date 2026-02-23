@@ -1,0 +1,201 @@
+from __future__ import annotations
+
+from typing import Any
+
+import jmapc
+from jmapc import methods as m
+from jmapc.models.email import EmailQueryFilterCondition
+
+from fmcli.account import Account
+
+
+def _get_client(account: Account, client: Any = None) -> Any:
+    return client if client is not None else account.get_jmap_client()
+
+
+def _email_to_dict(email: Any) -> dict:
+    from_email = ""
+    if email.mail_from:
+        from_email = str(email.mail_from[0].email)
+    return {
+        "id": email.id,
+        "subject": email.subject or "",
+        "from": from_email,
+        "preview": email.preview or "",
+        "date": str(email.received_at) if email.received_at else "",
+    }
+
+
+def _get_body(email: Any) -> str:
+    if not email.text_body or not email.body_values:
+        return ""
+    first_part = email.text_body[0]
+    part_id = first_part.part_id
+    body_value = email.body_values.get(part_id)
+    if body_value is None:
+        return ""
+    return body_value.value or ""
+
+
+def _get_identity(client: Any, account_email: str) -> Any:
+    resp = client.request(m.IdentityGet())
+    for identity in resp.data:
+        if identity.email == account_email:
+            return identity
+    if resp.data:
+        return resp.data[0]
+    raise RuntimeError("No identity found for account")
+
+
+def list_emails(account: Account, limit: int = 20, client: Any = None) -> list[dict]:
+    c = _get_client(account, client)
+    query_resp = c.request(m.EmailQuery(limit=limit))
+    if not query_resp.ids:
+        return []
+    get_resp = c.request(
+        m.EmailGet(
+            ids=query_resp.ids,
+            properties=["id", "subject", "from", "preview", "receivedAt"],
+        )
+    )
+    return [_email_to_dict(e) for e in get_resp.data]
+
+
+def search_emails(
+    account: Account, query: str, limit: int = 20, client: Any = None
+) -> list[dict]:
+    c = _get_client(account, client)
+    query_resp = c.request(
+        m.EmailQuery(
+            filter=EmailQueryFilterCondition(text=query),
+            limit=limit,
+        )
+    )
+    if not query_resp.ids:
+        return []
+    get_resp = c.request(
+        m.EmailGet(
+            ids=query_resp.ids,
+            properties=["id", "subject", "from", "preview", "receivedAt"],
+        )
+    )
+    return [_email_to_dict(e) for e in get_resp.data]
+
+
+def read_email(account: Account, email_id: str, client: Any = None) -> dict:
+    c = _get_client(account, client)
+    get_resp = c.request(
+        m.EmailGet(
+            ids=[email_id],
+            properties=[
+                "id",
+                "subject",
+                "from",
+                "preview",
+                "receivedAt",
+                "textBody",
+                "bodyValues",
+                "messageId",
+                "inReplyTo",
+            ],
+        )
+    )
+    if not get_resp.data:
+        raise ValueError(f"Email {email_id!r} not found")
+    email = get_resp.data[0]
+    result = _email_to_dict(email)
+    result["body"] = _get_body(email)
+    return result
+
+
+def send_email(
+    account: Account,
+    to: str,
+    subject: str,
+    body: str,
+    client: Any = None,
+) -> str:
+    c = _get_client(account, client)
+    identity = _get_identity(c, account.email)
+
+    draft = jmapc.Email(
+        mail_from=[jmapc.EmailAddress(email=account.email, name=None)],
+        to=[jmapc.EmailAddress(email=to, name=None)],
+        subject=subject,
+        keywords={"$draft": True},
+        body_values={"body": jmapc.EmailBodyValue(value=body, is_encoding_problem=False, is_truncated=False)},
+        text_body=[jmapc.EmailBodyPart(part_id="body", type="text/plain")],
+    )
+
+    responses = c.request(
+        [
+            m.EmailSet(create={"draft1": draft}),
+            m.EmailSubmissionSet(
+                create={
+                    "sub1": jmapc.EmailSubmission(
+                        email_id="#draft1",
+                        identity_id=identity.id,
+                    )
+                }
+            ),
+        ]
+    )
+
+    email_set_resp = responses[0]
+    if not email_set_resp.created:
+        raise RuntimeError("Failed to create email draft")
+    created_email = email_set_resp.created["draft1"]
+    return created_email.id
+
+
+def reply_email(account: Account, email_id: str, body: str, client: Any = None) -> str:
+    c = _get_client(account, client)
+
+    get_resp = c.request(
+        m.EmailGet(
+            ids=[email_id],
+            properties=["id", "subject", "from", "to", "messageId", "inReplyTo", "receivedAt"],
+        )
+    )
+    if not get_resp.data:
+        raise ValueError(f"Email {email_id!r} not found")
+    original = get_resp.data[0]
+
+    reply_to_email = original.mail_from[0].email if original.mail_from else ""
+    reply_subject = original.subject or ""
+    if not reply_subject.lower().startswith("re:"):
+        reply_subject = f"Re: {reply_subject}"
+
+    in_reply_to = original.message_id or []
+
+    identity = _get_identity(c, account.email)
+
+    draft = jmapc.Email(
+        mail_from=[jmapc.EmailAddress(email=account.email, name=None)],
+        to=[jmapc.EmailAddress(email=reply_to_email, name=None)],
+        subject=reply_subject,
+        in_reply_to=in_reply_to,
+        keywords={"$draft": True},
+        body_values={"body": jmapc.EmailBodyValue(value=body, is_encoding_problem=False, is_truncated=False)},
+        text_body=[jmapc.EmailBodyPart(part_id="body", type="text/plain")],
+    )
+
+    responses = c.request(
+        [
+            m.EmailSet(create={"draft1": draft}),
+            m.EmailSubmissionSet(
+                create={
+                    "sub1": jmapc.EmailSubmission(
+                        email_id="#draft1",
+                        identity_id=identity.id,
+                    )
+                }
+            ),
+        ]
+    )
+
+    email_set_resp = responses[0]
+    if not email_set_resp.created:
+        raise RuntimeError("Failed to create reply draft")
+    created_email = email_set_resp.created["draft1"]
+    return created_email.id

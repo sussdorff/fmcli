@@ -31,11 +31,12 @@ def list_events(account: Account, days: int = 30, client: Any = None) -> list[di
     result = []
     for ev in events:
         vevent = ev.vobject_instance.vevent
+        end_val = str(vevent.dtend.value) if hasattr(vevent, "dtend") else ""
         result.append({
             "id": str(vevent.uid.value),
             "title": str(vevent.summary.value),
             "start": str(vevent.dtstart.value),
-            "end": str(vevent.dtend.value),
+            "end": end_val,
             "location": str(vevent.location.value) if hasattr(vevent, "location") else "",
         })
     return result

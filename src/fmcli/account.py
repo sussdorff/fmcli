@@ -21,6 +21,7 @@ class Account:
     email: str
     token: str
     app_password: str | None = None
+    login: str | None = None
 
     @classmethod
     def from_config(cls, acc: AccountConfig) -> "Account":
@@ -29,10 +30,14 @@ class Account:
             email=acc.email,
             token=acc.token,
             app_password=acc.app_password,
+            login=acc.login,
         )
 
     def _dav_password(self) -> str:
         return self.app_password or self.token
+
+    def _dav_username(self) -> str:
+        return self.login or self.email
 
     def get_jmap_client(self, client: Any = None) -> jmapc.Client:
         if client is not None:
@@ -47,7 +52,7 @@ class Account:
             return client
         return caldav.DAVClient(
             url=CALDAV_URL,
-            username=self.email,
+            username=self._dav_username(),
             password=self._dav_password(),
         )
 
@@ -56,7 +61,7 @@ class Account:
             return client
         return WebDAVClient({
             "webdav_hostname": CARDDAV_URL,
-            "webdav_login": self.email,
+            "webdav_login": self._dav_username(),
             "webdav_password": self._dav_password(),
         })
 
@@ -65,6 +70,6 @@ class Account:
             return client
         return WebDAVClient({
             "webdav_hostname": WEBDAV_URL,
-            "webdav_login": self.email,
+            "webdav_login": self._dav_username(),
             "webdav_password": self._dav_password(),
         })

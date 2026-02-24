@@ -14,6 +14,7 @@ class AccountConfig:
     email: str
     token: str
     app_password: str | None = None
+    login: str | None = None
 
 
 @dataclass

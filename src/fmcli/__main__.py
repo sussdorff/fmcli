@@ -100,7 +100,7 @@ def email_list(
         date = e.get("date", "")[:10]
         sender = e.get("from", "")[:30]
         subject = e.get("subject", "")
-        email_id = e.get("id", "")[:8]
+        email_id = e.get("id", "")
         typer.echo(f"{email_id}  {date}  {sender:<30}  {subject}")
 
 
@@ -122,7 +122,7 @@ def email_search(
         date = e.get("date", "")[:10]
         sender = e.get("from", "")[:30]
         subject = e.get("subject", "")
-        email_id = e.get("id", "")[:8]
+        email_id = e.get("id", "")
         typer.echo(f"{email_id}  {date}  {sender:<30}  {subject}")
 
 

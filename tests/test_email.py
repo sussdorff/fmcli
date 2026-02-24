@@ -215,15 +215,23 @@ def test_send_email(account: Account) -> None:
     identity.email = "user@fastmail.com"
     identity_resp.data = [identity]
 
+    mailbox_resp = MagicMock()
+    drafts_mbox = MagicMock()
+    drafts_mbox.role = "drafts"
+    drafts_mbox.id = "mbox-drafts"
+    mailbox_resp.data = [drafts_mbox]
+
     email_set_resp = MagicMock()
     email_set_resp.created = {"draft1": MagicMock(id="email-abc")}
+    email_set_wrapper = MagicMock()
+    email_set_wrapper.response = email_set_resp
 
-    submission_set_resp = MagicMock()
-    submission_set_resp.created = {"sub1": MagicMock(id="sub-xyz")}
+    submission_set_wrapper = MagicMock()
 
     client.request.side_effect = [
         identity_resp,
-        [email_set_resp, submission_set_resp],
+        mailbox_resp,
+        [email_set_wrapper, submission_set_wrapper],
     ]
 
     result = send_email(
@@ -235,7 +243,7 @@ def test_send_email(account: Account) -> None:
     )
 
     assert result == "email-abc"
-    assert client.request.call_count == 2
+    assert client.request.call_count == 3
 
 
 def test_send_email_error(account: Account) -> None:
@@ -247,15 +255,24 @@ def test_send_email_error(account: Account) -> None:
     identity.email = "user@fastmail.com"
     identity_resp.data = [identity]
 
+    mailbox_resp = MagicMock()
+    drafts_mbox = MagicMock()
+    drafts_mbox.role = "drafts"
+    drafts_mbox.id = "mbox-drafts"
+    mailbox_resp.data = [drafts_mbox]
+
     email_set_resp = MagicMock()
     email_set_resp.created = None
     email_set_resp.not_created = {"draft1": MagicMock(description="some error")}
+    email_set_wrapper = MagicMock()
+    email_set_wrapper.response = email_set_resp
 
-    submission_set_resp = MagicMock()
+    submission_set_wrapper = MagicMock()
 
     client.request.side_effect = [
         identity_resp,
-        [email_set_resp, submission_set_resp],
+        mailbox_resp,
+        [email_set_wrapper, submission_set_wrapper],
     ]
 
     with pytest.raises(RuntimeError, match="Failed to create email"):
@@ -294,22 +311,30 @@ def test_reply_email(account: Account) -> None:
     identity.email = "user@fastmail.com"
     identity_resp.data = [identity]
 
+    mailbox_resp = MagicMock()
+    drafts_mbox = MagicMock()
+    drafts_mbox.role = "drafts"
+    drafts_mbox.id = "mbox-drafts"
+    mailbox_resp.data = [drafts_mbox]
+
     email_set_resp = MagicMock()
     email_set_resp.created = {"draft1": MagicMock(id="reply-id")}
+    email_set_wrapper = MagicMock()
+    email_set_wrapper.response = email_set_resp
 
-    submission_set_resp = MagicMock()
-    submission_set_resp.created = {"sub1": MagicMock(id="sub-reply")}
+    submission_set_wrapper = MagicMock()
 
     client.request.side_effect = [
         get_resp,
         identity_resp,
-        [email_set_resp, submission_set_resp],
+        mailbox_resp,
+        [email_set_wrapper, submission_set_wrapper],
     ]
 
     result = reply_email(account, email_id="orig-id", body="My reply", client=client)
 
     assert result == "reply-id"
-    assert client.request.call_count == 3
+    assert client.request.call_count == 4
 
 
 def test_reply_email_not_found(account: Account) -> None:

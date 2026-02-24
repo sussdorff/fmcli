@@ -37,6 +37,14 @@ def _get_body(email: Any) -> str:
     return body_value.value or ""
 
 
+def _get_drafts_mailbox_id(client: Any) -> str:
+    resp = client.request(m.MailboxGet(ids=None))
+    for mbox in resp.data:
+        if mbox.role == "drafts" or (hasattr(mbox.role, "value") and mbox.role.value == "drafts"):
+            return mbox.id
+    raise RuntimeError("No Drafts mailbox found")
+
+
 def _get_identity(client: Any, account_email: str) -> Any:
     resp = client.request(m.IdentityGet())
     for identity in resp.data:
@@ -98,6 +106,7 @@ def read_email(account: Account, email_id: str, client: Any = None) -> dict:
                 "messageId",
                 "inReplyTo",
             ],
+            fetch_text_body_values=True,
         )
     )
     if not get_resp.data:
@@ -117,11 +126,13 @@ def send_email(
 ) -> str:
     c = _get_client(account, client)
     identity = _get_identity(c, account.email)
+    drafts_id = _get_drafts_mailbox_id(c)
 
     draft = jmapc.Email(
         mail_from=[jmapc.EmailAddress(email=account.email, name=None)],
         to=[jmapc.EmailAddress(email=to, name=None)],
         subject=subject,
+        mailbox_ids={drafts_id: True},
         keywords={"$draft": True},
         body_values={"body": jmapc.EmailBodyValue(value=body, is_encoding_problem=False, is_truncated=False)},
         text_body=[jmapc.EmailBodyPart(part_id="body", type="text/plain")],
@@ -141,9 +152,9 @@ def send_email(
         ]
     )
 
-    email_set_resp = responses[0]
+    email_set_resp = responses[0].response
     if not email_set_resp.created:
-        raise RuntimeError("Failed to create email draft")
+        raise RuntimeError(f"Failed to create email draft: {email_set_resp.not_created}")
     created_email = email_set_resp.created["draft1"]
     return created_email.id
 
@@ -169,12 +180,14 @@ def reply_email(account: Account, email_id: str, body: str, client: Any = None) 
     in_reply_to = original.message_id or []
 
     identity = _get_identity(c, account.email)
+    drafts_id = _get_drafts_mailbox_id(c)
 
     draft = jmapc.Email(
         mail_from=[jmapc.EmailAddress(email=account.email, name=None)],
         to=[jmapc.EmailAddress(email=reply_to_email, name=None)],
         subject=reply_subject,
         in_reply_to=in_reply_to,
+        mailbox_ids={drafts_id: True},
         keywords={"$draft": True},
         body_values={"body": jmapc.EmailBodyValue(value=body, is_encoding_problem=False, is_truncated=False)},
         text_body=[jmapc.EmailBodyPart(part_id="body", type="text/plain")],
@@ -194,8 +207,8 @@ def reply_email(account: Account, email_id: str, body: str, client: Any = None) 
         ]
     )
 
-    email_set_resp = responses[0]
+    email_set_resp = responses[0].response
     if not email_set_resp.created:
-        raise RuntimeError("Failed to create reply draft")
+        raise RuntimeError(f"Failed to create reply draft: {email_set_resp.not_created}")
     created_email = email_set_resp.created["draft1"]
     return created_email.id

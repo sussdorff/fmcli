@@ -5,7 +5,7 @@ from typing import Optional
 import typer
 
 from fmcli import __version__
-from fmcli.cli_utils import resolve_account, load_config
+from fmcli.cli_utils import resolve_account, resolve_all_accounts, load_config
 
 app = typer.Typer(name="fmcli", help="Multi-account Fastmail CLI", no_args_is_help=True)
 
@@ -89,21 +89,29 @@ def email_list(
     limit: int = typer.Option(20, "--limit", "-n", help="Maximum number of emails to list"),
     mailbox: Optional[str] = typer.Option(None, "--mailbox", "-m", help="Filter by mailbox name or role (e.g. inbox, sent, drafts)"),
     unread: bool = typer.Option(False, "--unread", help="Show only unread emails"),
+    all_accounts: bool = typer.Option(False, "--all-accounts", help="Query all configured accounts"),
 ) -> None:
     """List recent emails."""
     from fmcli.commands.email import list_emails
 
-    acc = resolve_account(account)
-    emails = list_emails(acc, limit=limit, mailbox=mailbox, unread_only=unread)
-    if not emails:
-        typer.echo("No emails found.")
-        return
-    for e in emails:
-        date = e.get("date", "")[:10]
-        sender = e.get("from", "")[:30]
-        subject = e.get("subject", "")
-        email_id = e.get("id", "")
-        typer.echo(f"{email_id}  {date}  {sender:<30}  {subject}")
+    if all_accounts and account:
+        typer.echo("Error: --account and --all-accounts are mutually exclusive.", err=True)
+        raise typer.Exit(1)
+
+    accounts = resolve_all_accounts() if all_accounts else [resolve_account(account)]
+    for acc in accounts:
+        if all_accounts:
+            typer.echo(f"--- {acc.name} ({acc.email}) ---")
+        emails = list_emails(acc, limit=limit, mailbox=mailbox, unread_only=unread)
+        if not emails:
+            typer.echo("No emails found.")
+            continue
+        for e in emails:
+            date = e.get("date", "")[:10]
+            sender = e.get("from", "")[:30]
+            subject = e.get("subject", "")
+            email_id = e.get("id", "")
+            typer.echo(f"{email_id}  {date}  {sender:<30}  {subject}")
 
 
 @email_app.command("search")
@@ -318,20 +326,28 @@ def masked_email_delete(
 def calendar_list(
     days: int = typer.Option(30, "--days", help="Number of days ahead to look"),
     account: Optional[str] = ACCOUNT_OPTION,
+    all_accounts: bool = typer.Option(False, "--all-accounts", help="Query all configured accounts"),
 ) -> None:
     """List upcoming calendar events."""
     from fmcli.commands.calendar import list_events
 
-    acc = resolve_account(account)
-    events = list_events(acc, days=days)
-    if not events:
-        typer.echo("No events found.")
-        return
-    for ev in events:
-        location = f"  @ {ev.get('location')}" if ev.get("location") else ""
-        typer.echo(
-            f"{ev.get('start', '')[:16]}  {ev.get('title', ''):<40}{location}"
-        )
+    if all_accounts and account:
+        typer.echo("Error: --account and --all-accounts are mutually exclusive.", err=True)
+        raise typer.Exit(1)
+
+    accounts = resolve_all_accounts() if all_accounts else [resolve_account(account)]
+    for acc in accounts:
+        if all_accounts:
+            typer.echo(f"--- {acc.name} ({acc.email}) ---")
+        events = list_events(acc, days=days)
+        if not events:
+            typer.echo("No events found.")
+            continue
+        for ev in events:
+            location = f"  @ {ev.get('location')}" if ev.get("location") else ""
+            typer.echo(
+                f"{ev.get('start', '')[:16]}  {ev.get('title', ''):<40}{location}"
+            )
 
 
 @calendar_app.command("create")

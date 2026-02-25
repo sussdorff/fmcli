@@ -164,12 +164,19 @@ def email_send(
     body: str = typer.Option(..., "--body", "-b", help="Email body text"),
     account: Optional[str] = ACCOUNT_OPTION,
 ) -> None:
-    """Send an email."""
+    """Send an email (or create a draft if can_send is disabled)."""
     from fmcli.commands.email import send_email
 
     acc = resolve_account(account)
     email_id = send_email(acc, to=to, subject=subject, body=body)
-    typer.echo(f"Email sent. ID: {email_id}")
+    if acc.can_send:
+        typer.echo(f"Email sent. ID: {email_id}")
+    else:
+        typer.echo(f"Draft created. ID: {email_id}")
+        typer.echo("Opening Mail.app for review...")
+        import subprocess
+
+        subprocess.run(["open", "-a", "Mail"])
 
 
 @email_app.command("reply")
@@ -178,7 +185,7 @@ def email_reply(
     body: str = typer.Option(..., "--body", "-b", help="Reply body text"),
     account: Optional[str] = ACCOUNT_OPTION,
 ) -> None:
-    """Reply to an email."""
+    """Reply to an email (or create a reply draft if can_send is disabled)."""
     from fmcli.commands.email import reply_email
 
     acc = resolve_account(account)
@@ -187,7 +194,14 @@ def email_reply(
     except ValueError as err:
         typer.echo(f"Error: {err}", err=True)
         raise typer.Exit(1)
-    typer.echo(f"Reply sent. ID: {reply_id}")
+    if acc.can_send:
+        typer.echo(f"Reply sent. ID: {reply_id}")
+    else:
+        typer.echo(f"Reply draft created. ID: {reply_id}")
+        typer.echo("Opening Mail.app for review...")
+        import subprocess
+
+        subprocess.run(["open", "-a", "Mail"])
 
 
 # ---------------------------------------------------------------------------

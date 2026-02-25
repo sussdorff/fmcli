@@ -212,7 +212,8 @@ def test_email_read(tmp_path, monkeypatch, mocker):
     assert "This is the body." in result.output
 
 
-def test_email_send(tmp_path, monkeypatch, mocker):
+def test_email_send_draft_only(tmp_path, monkeypatch, mocker):
+    """Default can_send=False creates a draft and opens Mail.app."""
     config_file = tmp_path / "config.toml"
     config_file.write_text(
         '[[accounts]]\n'
@@ -221,12 +222,36 @@ def test_email_send(tmp_path, monkeypatch, mocker):
         'token = "abc123secret"\n'
     )
     monkeypatch.setenv("FMCLI_CONFIG", str(config_file))
+    mocker.patch("fmcli.commands.email.send_email", return_value="draft-id-999")
+    mock_run = mocker.patch("subprocess.run")
+    result = runner.invoke(
+        app,
+        ["email", "send", "--to", "bob@example.com", "--subject", "Hi", "--body", "Hello Bob"],
+    )
+    assert result.exit_code == 0
+    assert "Draft created" in result.output
+    assert "draft-id-999" in result.output
+    mock_run.assert_called_once_with(["open", "-a", "Mail"])
+
+
+def test_email_send_can_send(tmp_path, monkeypatch, mocker):
+    """With can_send=true, sends the email directly."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        '[[accounts]]\n'
+        'name = "personal"\n'
+        'email = "user@fastmail.com"\n'
+        'token = "abc123secret"\n'
+        'can_send = true\n'
+    )
+    monkeypatch.setenv("FMCLI_CONFIG", str(config_file))
     mocker.patch("fmcli.commands.email.send_email", return_value="sent-id-999")
     result = runner.invoke(
         app,
         ["email", "send", "--to", "bob@example.com", "--subject", "Hi", "--body", "Hello Bob"],
     )
     assert result.exit_code == 0
+    assert "Email sent" in result.output
     assert "sent-id-999" in result.output
 
 

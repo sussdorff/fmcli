@@ -94,3 +94,38 @@ def test_app_password_optional(tmp_path: Path) -> None:
     config = Config.load(config_path=path)
     acc = config.accounts[0]
     assert acc.app_password is None
+
+
+CAN_SEND_TOML = """\
+[[accounts]]
+name = "bot"
+email = "bot@fastmail.com"
+token = "bottoken"
+can_send = true
+
+[[accounts]]
+name = "human"
+email = "human@fastmail.com"
+token = "humantoken"
+"""
+
+
+def test_can_send_true(tmp_path: Path) -> None:
+    path = _write_config(tmp_path, CAN_SEND_TOML)
+    config = Config.load(config_path=path)
+    bot = config.get_account("bot")
+    assert bot.can_send is True
+
+
+def test_can_send_defaults_false(tmp_path: Path) -> None:
+    path = _write_config(tmp_path, CAN_SEND_TOML)
+    config = Config.load(config_path=path)
+    human = config.get_account("human")
+    assert human.can_send is False
+
+
+def test_can_send_single_account_default(tmp_path: Path) -> None:
+    path = _write_config(tmp_path, SINGLE_ACCOUNT_TOML)
+    config = Config.load(config_path=path)
+    acc = config.accounts[0]
+    assert acc.can_send is False

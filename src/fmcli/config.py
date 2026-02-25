@@ -15,6 +15,7 @@ class AccountConfig:
     token: str
     app_password: str | None = None
     login: str | None = None
+    can_send: bool = False
 
 
 @dataclass

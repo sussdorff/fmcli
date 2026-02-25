@@ -7,6 +7,7 @@ import pytest
 
 from fmcli.account import Account
 from fmcli.commands.email import (
+    create_draft,
     list_emails,
     read_email,
     reply_email,
@@ -17,7 +18,12 @@ from fmcli.commands.email import (
 
 @pytest.fixture
 def account() -> Account:
-    return Account(name="personal", email="user@fastmail.com", token="tok123")
+    return Account(name="personal", email="user@fastmail.com", token="tok123", can_send=True)
+
+
+@pytest.fixture
+def draft_only_account() -> Account:
+    return Account(name="personal", email="user@fastmail.com", token="tok123", can_send=False)
 
 
 def _make_email(
@@ -459,3 +465,138 @@ def test_reply_email_not_found(account: Account) -> None:
 
     with pytest.raises(ValueError, match="not found"):
         reply_email(account, email_id="bad-id", body="reply", client=client)
+
+
+# --- create_draft ---
+
+
+def _mock_drafts_mailbox(client: MagicMock) -> None:
+    """Set up client to return a Drafts mailbox for _get_drafts_mailbox_id."""
+    drafts_mb = MagicMock()
+    drafts_mb.id = "drafts-mb-1"
+    drafts_mb.role = "drafts"
+    mb_resp = MagicMock()
+    mb_resp.data = [drafts_mb]
+    return mb_resp
+
+
+def test_create_draft(draft_only_account: Account) -> None:
+    client = MagicMock()
+
+    mb_resp = _mock_drafts_mailbox(client)
+    email_set_resp = MagicMock()
+    email_set_resp.created = {"draft1": MagicMock(id="draft-id-123")}
+    email_set_resp.not_created = None
+
+    client.request.side_effect = [mb_resp, email_set_resp]
+
+    result = create_draft(
+        draft_only_account,
+        to="recipient@example.com",
+        subject="Draft Subject",
+        body="Draft body",
+        client=client,
+    )
+
+    assert result == "draft-id-123"
+    assert client.request.call_count == 2
+
+
+def test_create_draft_error(draft_only_account: Account) -> None:
+    client = MagicMock()
+
+    mb_resp = _mock_drafts_mailbox(client)
+    email_set_resp = MagicMock()
+    email_set_resp.created = None
+    email_set_resp.not_created = {"draft1": MagicMock(description="error")}
+
+    client.request.side_effect = [mb_resp, email_set_resp]
+
+    with pytest.raises(RuntimeError, match="Failed to create email draft"):
+        create_draft(
+            draft_only_account,
+            to="recipient@example.com",
+            subject="Test",
+            body="Body",
+            client=client,
+        )
+
+
+# --- send_email with can_send=False (draft-only mode) ---
+
+
+def test_send_email_draft_only(draft_only_account: Account) -> None:
+    """When can_send=False, send_email should only create a draft (no EmailSubmissionSet)."""
+    client = MagicMock()
+
+    mb_resp = _mock_drafts_mailbox(client)
+    email_set_resp = MagicMock()
+    email_set_resp.created = {"draft1": MagicMock(id="draft-only-id")}
+    email_set_resp.not_created = None
+
+    client.request.side_effect = [mb_resp, email_set_resp]
+
+    result = send_email(
+        draft_only_account,
+        to="recipient@example.com",
+        subject="Test",
+        body="Body",
+        client=client,
+    )
+
+    assert result == "draft-only-id"
+    # Should only call MailboxGet + EmailSet, NOT IdentityGet or EmailSubmissionSet
+    assert client.request.call_count == 2
+    # Verify the second call is an EmailSet (not a list with EmailSubmissionSet)
+    second_call_arg = client.request.call_args_list[1][0][0]
+    assert hasattr(second_call_arg, "create")
+
+
+# --- reply_email with can_send=False (draft-only mode) ---
+
+
+def test_reply_email_draft_only(draft_only_account: Account) -> None:
+    """When can_send=False, reply_email should create a draft reply without submitting."""
+    client = MagicMock()
+
+    original_email = _make_email(
+        "orig-id",
+        "Original Subject",
+        "alice@example.com",
+        "original preview",
+        message_id=["<orig-id@example.com>"],
+    )
+    to_addr = MagicMock()
+    to_addr.email = "alice@example.com"
+    original_email.to = [to_addr]
+
+    get_resp = MagicMock()
+    get_resp.data = [original_email]
+
+    mb_resp = _mock_drafts_mailbox(client)
+    email_set_resp = MagicMock()
+    email_set_resp.created = {"draft1": MagicMock(id="reply-draft-id")}
+    email_set_resp.not_created = None
+
+    # EmailGet (original) -> MailboxGet (drafts) -> EmailSet (draft)
+    client.request.side_effect = [get_resp, mb_resp, email_set_resp]
+
+    result = reply_email(
+        draft_only_account,
+        email_id="orig-id",
+        body="My reply",
+        client=client,
+    )
+
+    assert result == "reply-draft-id"
+    # Should be: EmailGet + MailboxGet + EmailSet = 3 calls, but NO IdentityGet or EmailSubmissionSet
+    assert client.request.call_count == 3
+
+
+# --- account default can_send ---
+
+
+def test_account_default_can_send() -> None:
+    """Verify that Account defaults to can_send=False (safe default)."""
+    acc = Account(name="test", email="test@example.com", token="tok")
+    assert acc.can_send is False

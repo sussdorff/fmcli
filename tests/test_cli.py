@@ -5,6 +5,7 @@ from typer.testing import CliRunner
 
 from fmcli.__main__ import app
 from fmcli import __version__
+from fmcli.cli_utils import resolve_all_accounts
 
 runner = CliRunner()
 
@@ -382,3 +383,102 @@ def test_files_list(tmp_path, monkeypatch, mocker):
     assert result.exit_code == 0
     assert "report.pdf" in result.output
     assert "photos" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Multi-account config helper
+# ---------------------------------------------------------------------------
+
+MULTI_ACCOUNT_CONFIG = (
+    '[[accounts]]\n'
+    'name = "personal"\n'
+    'email = "user@fastmail.com"\n'
+    'token = "tok-personal"\n'
+    '\n'
+    '[[accounts]]\n'
+    'name = "work"\n'
+    'email = "user@work.com"\n'
+    'token = "tok-work"\n'
+)
+
+
+# ---------------------------------------------------------------------------
+# resolve_all_accounts
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_all_accounts(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(MULTI_ACCOUNT_CONFIG)
+    monkeypatch.setenv("FMCLI_CONFIG", str(config_file))
+    accounts = resolve_all_accounts()
+    assert len(accounts) == 2
+    assert accounts[0].name == "personal"
+    assert accounts[1].name == "work"
+
+
+# ---------------------------------------------------------------------------
+# --all-accounts flag
+# ---------------------------------------------------------------------------
+
+
+def test_email_list_all_accounts(tmp_path, monkeypatch, mocker):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(MULTI_ACCOUNT_CONFIG)
+    monkeypatch.setenv("FMCLI_CONFIG", str(config_file))
+
+    def fake_list_emails(acc, limit=20):
+        if acc.name == "personal":
+            return [{"id": "p1234567", "date": "2024-01-15T10:00:00",
+                     "from": "alice@example.com", "subject": "Personal Mail"}]
+        return [{"id": "w1234567", "date": "2024-01-16T10:00:00",
+                 "from": "bob@work.com", "subject": "Work Mail"}]
+
+    mocker.patch("fmcli.commands.email.list_emails", side_effect=fake_list_emails)
+    result = runner.invoke(app, ["email", "list", "--all-accounts"])
+    assert result.exit_code == 0
+    assert "--- personal (user@fastmail.com) ---" in result.output
+    assert "--- work (user@work.com) ---" in result.output
+    assert "Personal Mail" in result.output
+    assert "Work Mail" in result.output
+
+
+def test_email_list_all_accounts_and_account_mutual_exclusion(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(MULTI_ACCOUNT_CONFIG)
+    monkeypatch.setenv("FMCLI_CONFIG", str(config_file))
+    result = runner.invoke(app, ["email", "list", "--all-accounts", "--account", "personal"])
+    assert result.exit_code == 1
+    assert "mutually exclusive" in result.output
+
+
+def test_calendar_list_all_accounts(tmp_path, monkeypatch, mocker):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(MULTI_ACCOUNT_CONFIG)
+    monkeypatch.setenv("FMCLI_CONFIG", str(config_file))
+
+    def fake_list_events(acc, days=30):
+        if acc.name == "personal":
+            return [{"id": "uid-p1", "title": "Personal Event",
+                     "start": "2024-01-15T10:00:00", "end": "2024-01-15T11:00:00",
+                     "location": ""}]
+        return [{"id": "uid-w1", "title": "Work Meeting",
+                 "start": "2024-01-16T09:00:00", "end": "2024-01-16T10:00:00",
+                 "location": "Office"}]
+
+    mocker.patch("fmcli.commands.calendar.list_events", side_effect=fake_list_events)
+    result = runner.invoke(app, ["calendar", "list", "--all-accounts"])
+    assert result.exit_code == 0
+    assert "--- personal (user@fastmail.com) ---" in result.output
+    assert "--- work (user@work.com) ---" in result.output
+    assert "Personal Event" in result.output
+    assert "Work Meeting" in result.output
+
+
+def test_calendar_list_all_accounts_and_account_mutual_exclusion(tmp_path, monkeypatch):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(MULTI_ACCOUNT_CONFIG)
+    monkeypatch.setenv("FMCLI_CONFIG", str(config_file))
+    result = runner.invoke(app, ["calendar", "list", "--all-accounts", "--account", "personal"])
+    assert result.exit_code == 1
+    assert "mutually exclusive" in result.output

@@ -45,3 +45,9 @@ def load_config() -> Config:
             err=True,
         )
         raise typer.Exit(1)
+
+
+def resolve_all_accounts() -> list[Account]:
+    """Load config and return all accounts."""
+    config = load_config()
+    return [Account.from_config(acc) for acc in config.accounts]

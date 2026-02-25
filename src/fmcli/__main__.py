@@ -28,6 +28,37 @@ app.add_typer(files_app, name="files")
 ACCOUNT_OPTION = typer.Option(None, "--account", "-a", help="Account name (or FMC_ACCOUNT env var)")
 
 
+def _open_mail_drafts(account_email: str) -> None:
+    """Open Mail.app Drafts folder for the account matching account_email."""
+    import subprocess
+    import sys
+
+    if sys.platform != "darwin":
+        typer.echo("Opening Mail.app is only supported on macOS.", err=True)
+        return
+
+    script = f'''
+    tell application "Mail"
+        activate
+        set targetAccount to missing value
+        repeat with acct in every account
+            repeat with addr in every email address of acct
+                if addr as text is "{account_email}" then
+                    set targetAccount to acct
+                    exit repeat
+                end if
+            end repeat
+            if targetAccount is not missing value then exit repeat
+        end repeat
+        if targetAccount is not missing value then
+            set selected mailboxes of message viewer 1 to {{mailbox "Drafts" of targetAccount}}
+        end if
+    end tell
+    '''
+    typer.echo("Opening Drafts in Mail.app...")
+    subprocess.run(["osascript", "-e", script], capture_output=True)
+
+
 def version_callback(value: bool) -> None:
     if value:
         typer.echo(f"fmcli {__version__}")
@@ -173,10 +204,7 @@ def email_send(
         typer.echo(f"Email sent. ID: {email_id}")
     else:
         typer.echo(f"Draft created. ID: {email_id}")
-        typer.echo("Opening Mail.app for review...")
-        import subprocess
-
-        subprocess.run(["open", "-a", "Mail"])
+        _open_mail_drafts(acc.email)
 
 
 @email_app.command("reply")
@@ -198,10 +226,7 @@ def email_reply(
         typer.echo(f"Reply sent. ID: {reply_id}")
     else:
         typer.echo(f"Reply draft created. ID: {reply_id}")
-        typer.echo("Opening Mail.app for review...")
-        import subprocess
-
-        subprocess.run(["open", "-a", "Mail"])
+        _open_mail_drafts(acc.email)
 
 
 # ---------------------------------------------------------------------------

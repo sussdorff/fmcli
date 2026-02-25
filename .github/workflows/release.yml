@@ -21,7 +21,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Run tests
-        run: uv run pytest -v
+        run: uv run --extra dev pytest -v
 
   publish:
     needs: test

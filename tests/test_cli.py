@@ -231,7 +231,9 @@ def test_email_send_draft_only(tmp_path, monkeypatch, mocker):
     assert result.exit_code == 0
     assert "Draft created" in result.output
     assert "draft-id-999" in result.output
-    mock_run.assert_called_once_with(["open", "-a", "Mail"])
+    mock_run.assert_called_once()
+    call_args = mock_run.call_args
+    assert call_args[0][0][0] == "osascript"
 
 
 def test_email_send_can_send(tmp_path, monkeypatch, mocker):

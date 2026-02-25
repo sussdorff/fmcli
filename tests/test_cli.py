@@ -224,6 +224,7 @@ def test_email_send_draft_only(tmp_path, monkeypatch, mocker):
     monkeypatch.setenv("FMCLI_CONFIG", str(config_file))
     mocker.patch("fmcli.commands.email.send_email", return_value="draft-id-999")
     mock_run = mocker.patch("subprocess.run")
+    mocker.patch("sys.platform", "darwin")
     result = runner.invoke(
         app,
         ["email", "send", "--to", "bob@example.com", "--subject", "Hi", "--body", "Hello Bob"],

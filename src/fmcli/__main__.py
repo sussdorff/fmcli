@@ -87,12 +87,14 @@ def account_show(name: str = typer.Argument(..., help="Account name to show")) -
 def email_list(
     account: Optional[str] = ACCOUNT_OPTION,
     limit: int = typer.Option(20, "--limit", "-n", help="Maximum number of emails to list"),
+    mailbox: Optional[str] = typer.Option(None, "--mailbox", "-m", help="Filter by mailbox name or role (e.g. inbox, sent, drafts)"),
+    unread: bool = typer.Option(False, "--unread", help="Show only unread emails"),
 ) -> None:
     """List recent emails."""
     from fmcli.commands.email import list_emails
 
     acc = resolve_account(account)
-    emails = list_emails(acc, limit=limit)
+    emails = list_emails(acc, limit=limit, mailbox=mailbox, unread_only=unread)
     if not emails:
         typer.echo("No emails found.")
         return

@@ -113,6 +113,120 @@ def test_list_emails_empty(account: Account) -> None:
     assert client.request.call_count == 1
 
 
+def test_list_emails_mailbox_filter(account: Account) -> None:
+    client = MagicMock()
+
+    # First call: MailboxGet to resolve mailbox name
+    mb_resp = MagicMock()
+    inbox_mb = MagicMock()
+    inbox_mb.id = "mb-inbox-1"
+    inbox_mb.name = "Inbox"
+    inbox_mb.role = "inbox"
+    sent_mb = MagicMock()
+    sent_mb.id = "mb-sent-1"
+    sent_mb.name = "Sent"
+    sent_mb.role = "sent"
+    mb_resp.data = [inbox_mb, sent_mb]
+
+    # Second call: EmailQuery
+    query_resp = MagicMock()
+    query_resp.ids = ["id1"]
+
+    # Third call: EmailGet
+    email1 = _make_email("id1", "Inbox Email", "alice@example.com", "Preview")
+    get_resp = MagicMock()
+    get_resp.data = [email1]
+
+    client.request.side_effect = [mb_resp, query_resp, get_resp]
+
+    result = list_emails(account, mailbox="inbox", client=client)
+
+    assert len(result) == 1
+    assert result[0]["id"] == "id1"
+    # Verify the EmailQuery used the correct filter
+    query_call_arg = client.request.call_args_list[1][0][0]
+    assert query_call_arg.filter.in_mailbox == "mb-inbox-1"
+
+
+def test_list_emails_mailbox_filter_by_name(account: Account) -> None:
+    client = MagicMock()
+
+    mb_resp = MagicMock()
+    custom_mb = MagicMock()
+    custom_mb.id = "mb-custom-1"
+    custom_mb.name = "My Projects"
+    custom_mb.role = None
+    mb_resp.data = [custom_mb]
+
+    query_resp = MagicMock()
+    query_resp.ids = []
+    client.request.side_effect = [mb_resp, query_resp]
+
+    result = list_emails(account, mailbox="my projects", client=client)
+
+    assert result == []
+    query_call_arg = client.request.call_args_list[1][0][0]
+    assert query_call_arg.filter.in_mailbox == "mb-custom-1"
+
+
+def test_list_emails_mailbox_not_found(account: Account) -> None:
+    client = MagicMock()
+
+    mb_resp = MagicMock()
+    mb_resp.data = []
+    client.request.return_value = mb_resp
+
+    with pytest.raises(ValueError, match="not found"):
+        list_emails(account, mailbox="nonexistent", client=client)
+
+
+def test_list_emails_unread_filter(account: Account) -> None:
+    client = MagicMock()
+
+    query_resp = MagicMock()
+    query_resp.ids = ["id1"]
+
+    email1 = _make_email("id1", "Unread Email", "alice@example.com", "Preview")
+    get_resp = MagicMock()
+    get_resp.data = [email1]
+
+    client.request.side_effect = [query_resp, get_resp]
+
+    result = list_emails(account, unread_only=True, client=client)
+
+    assert len(result) == 1
+    query_call_arg = client.request.call_args_list[0][0][0]
+    assert query_call_arg.filter.not_keyword == "$seen"
+
+
+def test_list_emails_mailbox_and_unread_combined(account: Account) -> None:
+    client = MagicMock()
+
+    mb_resp = MagicMock()
+    inbox_mb = MagicMock()
+    inbox_mb.id = "mb-inbox-1"
+    inbox_mb.name = "Inbox"
+    inbox_mb.role = "inbox"
+    mb_resp.data = [inbox_mb]
+
+    query_resp = MagicMock()
+    query_resp.ids = ["id1"]
+
+    email1 = _make_email("id1", "Unread Inbox", "alice@example.com", "Preview")
+    get_resp = MagicMock()
+    get_resp.data = [email1]
+
+    client.request.side_effect = [mb_resp, query_resp, get_resp]
+
+    result = list_emails(account, mailbox="inbox", unread_only=True, client=client)
+
+    assert len(result) == 1
+    # Verify the EmailQuery has both filters
+    query_call_arg = client.request.call_args_list[1][0][0]
+    assert query_call_arg.filter.in_mailbox == "mb-inbox-1"
+    assert query_call_arg.filter.not_keyword == "$seen"
+
+
 # --- search_emails ---
 
 

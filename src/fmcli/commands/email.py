@@ -47,9 +47,40 @@ def _get_identity(client: Any, account_email: str) -> Any:
     raise RuntimeError("No identity found for account")
 
 
-def list_emails(account: Account, limit: int = 20, client: Any = None) -> list[dict]:
+def _resolve_mailbox_id(client: Any, mailbox: str) -> str:
+    """Resolve a mailbox name or role to its ID."""
+    resp = client.request(m.MailboxGet(ids=None))
+    mailbox_lower = mailbox.lower()
+    # Try matching by role first, then by name (case-insensitive)
+    for mb in resp.data:
+        if mb.role and mb.role.lower() == mailbox_lower:
+            return mb.id
+    for mb in resp.data:
+        if mb.name and mb.name.lower() == mailbox_lower:
+            return mb.id
+    raise ValueError(f"Mailbox {mailbox!r} not found")
+
+
+def list_emails(
+    account: Account,
+    limit: int = 20,
+    mailbox: str | None = None,
+    unread_only: bool = False,
+    client: Any = None,
+) -> list[dict]:
     c = _get_client(account, client)
-    query_resp = c.request(m.EmailQuery(limit=limit))
+
+    filter_condition = None
+    filter_kwargs: dict[str, Any] = {}
+    if mailbox:
+        mailbox_id = _resolve_mailbox_id(c, mailbox)
+        filter_kwargs["in_mailbox"] = mailbox_id
+    if unread_only:
+        filter_kwargs["not_keyword"] = "$seen"
+    if filter_kwargs:
+        filter_condition = EmailQueryFilterCondition(**filter_kwargs)
+
+    query_resp = c.request(m.EmailQuery(filter=filter_condition, limit=limit))
     if not query_resp.ids:
         return []
     get_resp = c.request(

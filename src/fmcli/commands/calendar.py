@@ -18,15 +18,30 @@ def _get_default_calendar(dav_client: caldav.DAVClient) -> caldav.Calendar:
     return dav_client.principal().calendars()[0]
 
 
-def list_events(account: Account, days: int = 30, client: Any = None) -> list[dict]:
+def list_events(
+    account: Account,
+    days: int = 30,
+    today: bool = False,
+    client: Any = None,
+) -> list[dict]:
     """Return events from the default calendar within the next ``days`` days.
+
+    If *today* is True the window ends at 23:59:59 local time today,
+    ignoring the *days* parameter.
 
     Each event is represented as a dict with keys: id, title, start, end, location.
     """
     c = _get_client(account, client)
     cal = _get_default_calendar(c)
     now = datetime.now(tz=timezone.utc)
-    end = now + timedelta(days=days)
+    if today:
+        end = (
+            datetime.now()
+            .replace(hour=23, minute=59, second=59)
+            .astimezone(timezone.utc)
+        )
+    else:
+        end = now + timedelta(days=days)
     events = cal.search(start=now, end=end, event=True)
     result = []
     for ev in events:
@@ -38,6 +53,34 @@ def list_events(account: Account, days: int = 30, client: Any = None) -> list[di
             "end": str(vevent.dtend.value),
             "location": str(vevent.location.value) if hasattr(vevent, "location") else "",
         })
+    return result
+
+
+def search_events(
+    account: Account,
+    query: str,
+    days_back: int = 365,
+    client: Any = None,
+) -> list[dict]:
+    """Search past events by title within the last ``days_back`` days."""
+    c = _get_client(account, client)
+    cal = _get_default_calendar(c)
+    now = datetime.now(tz=timezone.utc)
+    start = now - timedelta(days=days_back)
+    events = cal.search(start=start, end=now, event=True)
+    result = []
+    for ev in events:
+        vevent = ev.vobject_instance.vevent
+        title = str(vevent.summary.value)
+        if query.lower() in title.lower():
+            end_val = str(vevent.dtend.value) if hasattr(vevent, "dtend") else ""
+            result.append({
+                "id": str(vevent.uid.value),
+                "title": title,
+                "start": str(vevent.dtstart.value),
+                "end": end_val,
+                "location": str(vevent.location.value) if hasattr(vevent, "location") else "",
+            })
     return result
 
 

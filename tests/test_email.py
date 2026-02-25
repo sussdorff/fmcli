@@ -362,7 +362,7 @@ def test_send_email(account: Account) -> None:
         client=client,
     )
 
-    assert result == "email-abc"
+    assert result == {"id": "email-abc", "message_id": ""}
     assert client.request.call_count == 3
 
 
@@ -453,7 +453,7 @@ def test_reply_email(account: Account) -> None:
 
     result = reply_email(account, email_id="orig-id", body="My reply", client=client)
 
-    assert result == "reply-id"
+    assert result == {"id": "reply-id", "message_id": ""}
     assert client.request.call_count == 4
 
 
@@ -488,7 +488,10 @@ def test_create_draft(draft_only_account: Account) -> None:
     email_set_resp.created = {"draft1": MagicMock(id="draft-id-123")}
     email_set_resp.not_created = None
 
-    client.request.side_effect = [mb_resp, email_set_resp]
+    get_msg_resp = MagicMock()
+    get_msg_resp.data = [MagicMock(message_id=["test-msg-id@example"])]
+
+    client.request.side_effect = [mb_resp, email_set_resp, get_msg_resp]
 
     result = create_draft(
         draft_only_account,
@@ -498,8 +501,8 @@ def test_create_draft(draft_only_account: Account) -> None:
         client=client,
     )
 
-    assert result == "draft-id-123"
-    assert client.request.call_count == 2
+    assert result == {"id": "draft-id-123", "message_id": "test-msg-id@example"}
+    assert client.request.call_count == 3
 
 
 def test_create_draft_error(draft_only_account: Account) -> None:
@@ -534,7 +537,10 @@ def test_send_email_draft_only(draft_only_account: Account) -> None:
     email_set_resp.created = {"draft1": MagicMock(id="draft-only-id")}
     email_set_resp.not_created = None
 
-    client.request.side_effect = [mb_resp, email_set_resp]
+    get_msg_resp = MagicMock()
+    get_msg_resp.data = [MagicMock(message_id=["draft-msg-id@example"])]
+
+    client.request.side_effect = [mb_resp, email_set_resp, get_msg_resp]
 
     result = send_email(
         draft_only_account,
@@ -544,12 +550,9 @@ def test_send_email_draft_only(draft_only_account: Account) -> None:
         client=client,
     )
 
-    assert result == "draft-only-id"
-    # Should only call MailboxGet + EmailSet, NOT IdentityGet or EmailSubmissionSet
-    assert client.request.call_count == 2
-    # Verify the second call is an EmailSet (not a list with EmailSubmissionSet)
-    second_call_arg = client.request.call_args_list[1][0][0]
-    assert hasattr(second_call_arg, "create")
+    assert result == {"id": "draft-only-id", "message_id": "draft-msg-id@example"}
+    # Should only call MailboxGet + EmailSet + EmailGet(messageId), NOT IdentityGet or EmailSubmissionSet
+    assert client.request.call_count == 3
 
 
 # --- reply_email with can_send=False (draft-only mode) ---
@@ -578,8 +581,11 @@ def test_reply_email_draft_only(draft_only_account: Account) -> None:
     email_set_resp.created = {"draft1": MagicMock(id="reply-draft-id")}
     email_set_resp.not_created = None
 
-    # EmailGet (original) -> MailboxGet (drafts) -> EmailSet (draft)
-    client.request.side_effect = [get_resp, mb_resp, email_set_resp]
+    get_msg_resp = MagicMock()
+    get_msg_resp.data = [MagicMock(message_id=["reply-msg-id@example"])]
+
+    # EmailGet (original) -> MailboxGet (drafts) -> EmailSet (draft) -> EmailGet (messageId)
+    client.request.side_effect = [get_resp, mb_resp, email_set_resp, get_msg_resp]
 
     result = reply_email(
         draft_only_account,
@@ -588,9 +594,9 @@ def test_reply_email_draft_only(draft_only_account: Account) -> None:
         client=client,
     )
 
-    assert result == "reply-draft-id"
-    # Should be: EmailGet + MailboxGet + EmailSet = 3 calls, but NO IdentityGet or EmailSubmissionSet
-    assert client.request.call_count == 3
+    assert result == {"id": "reply-draft-id", "message_id": "reply-msg-id@example"}
+    # Should be: EmailGet + MailboxGet + EmailSet + EmailGet(messageId) = 4 calls
+    assert client.request.call_count == 4
 
 
 # --- account default can_send ---

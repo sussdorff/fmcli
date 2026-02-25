@@ -155,8 +155,8 @@ def create_draft(
     body: str,
     client: Any = None,
     in_reply_to: list[str] | None = None,
-) -> str:
-    """Create an email draft without sending. Returns the email ID."""
+) -> dict:
+    """Create an email draft without sending. Returns dict with 'id' and 'message_id'."""
     c = _get_client(account, client)
     drafts_id = _get_drafts_mailbox_id(c)
     draft = jmapc.Email(
@@ -172,7 +172,14 @@ def create_draft(
     resp = c.request(m.EmailSet(create={"draft1": draft}))
     if not resp.created:
         raise RuntimeError(f"Failed to create email draft: {resp.not_created}")
-    return resp.created["draft1"].id
+    created = resp.created["draft1"]
+    email_id = created.id
+    # Fetch the RFC Message-ID header for Mail.app integration
+    get_resp = c.request(m.EmailGet(ids=[email_id], properties=["messageId"]))
+    message_id = ""
+    if get_resp.data and get_resp.data[0].message_id:
+        message_id = get_resp.data[0].message_id[0]
+    return {"id": email_id, "message_id": message_id}
 
 
 def send_email(
@@ -217,10 +224,10 @@ def send_email(
     if not email_set_resp.created:
         raise RuntimeError(f"Failed to create email draft: {email_set_resp.not_created}")
     created_email = email_set_resp.created["draft1"]
-    return created_email.id
+    return {"id": created_email.id, "message_id": ""}
 
 
-def reply_email(account: Account, email_id: str, body: str, client: Any = None) -> str:
+def reply_email(account: Account, email_id: str, body: str, client: Any = None) -> dict | str:
     c = _get_client(account, client)
 
     get_resp = c.request(
@@ -282,4 +289,4 @@ def reply_email(account: Account, email_id: str, body: str, client: Any = None) 
     if not email_set_resp.created:
         raise RuntimeError(f"Failed to create reply draft: {email_set_resp.not_created}")
     created_email = email_set_resp.created["draft1"]
-    return created_email.id
+    return {"id": created_email.id, "message_id": ""}

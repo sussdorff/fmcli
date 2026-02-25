@@ -325,6 +325,7 @@ def masked_email_delete(
 @calendar_app.command("list")
 def calendar_list(
     days: int = typer.Option(30, "--days", help="Number of days ahead to look"),
+    today: bool = typer.Option(False, "--today", help="Show only today's remaining events"),
     account: Optional[str] = ACCOUNT_OPTION,
     all_accounts: bool = typer.Option(False, "--all-accounts", help="Query all configured accounts"),
 ) -> None:
@@ -339,7 +340,7 @@ def calendar_list(
     for acc in accounts:
         if all_accounts:
             typer.echo(f"--- {acc.name} ({acc.email}) ---")
-        events = list_events(acc, days=days)
+        events = list_events(acc, days=days, today=today)
         if not events:
             typer.echo("No events found.")
             continue
@@ -348,6 +349,27 @@ def calendar_list(
             typer.echo(
                 f"{ev.get('start', '')[:16]}  {ev.get('title', ''):<40}{location}"
             )
+
+
+@calendar_app.command("search")
+def calendar_search(
+    query: str = typer.Argument(..., help="Search query (matches event title)"),
+    days_back: int = typer.Option(365, "--days-back", help="How many days back to search"),
+    account: Optional[str] = ACCOUNT_OPTION,
+) -> None:
+    """Search past calendar events by title."""
+    from fmcli.commands.calendar import search_events
+
+    acc = resolve_account(account)
+    events = search_events(acc, query=query, days_back=days_back)
+    if not events:
+        typer.echo("No events found.")
+        return
+    for ev in events:
+        location = f"  @ {ev.get('location')}" if ev.get("location") else ""
+        typer.echo(
+            f"{ev.get('start', '')[:16]}  {ev.get('title', ''):<40}{location}"
+        )
 
 
 @calendar_app.command("create")

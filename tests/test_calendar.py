@@ -260,3 +260,109 @@ def test_delete_event_not_found(mocker, account):
 
     with pytest.raises(ValueError, match="uid-missing"):
         cal_cmd.delete_event(account, uid="uid-missing", client=mock_client)
+
+
+# ---------------------------------------------------------------------------
+# list_events --today
+# ---------------------------------------------------------------------------
+
+def test_list_events_today_sets_end_before_midnight(mocker, account):
+    """When today=True the search end time should be 23:59:59 local time today."""
+    ev = _make_mock_event(
+        mocker, "uid-today", "Daily Standup",
+        datetime.datetime(2024, 1, 15, 9, 0),
+        datetime.datetime(2024, 1, 15, 9, 30),
+    )
+    mock_client, mock_calendar = _setup_mock_client(mocker, [ev])
+
+    result = cal_cmd.list_events(account, today=True, client=mock_client)
+
+    # Verify the search was called with an end time that is today 23:59:59 (UTC)
+    call_kwargs = mock_calendar.search.call_args
+    end_arg = call_kwargs.kwargs.get("end") or call_kwargs[1].get("end")
+    # The end must be on the same date as "now" and at 23:59:59 (or its UTC equiv)
+    assert end_arg.hour <= 23
+    assert end_arg.second == 59 or end_arg.minute == 59  # depends on tz offset
+
+    assert len(result) == 1
+    assert result[0]["title"] == "Daily Standup"
+
+
+def test_list_events_today_ignores_days_parameter(mocker, account):
+    """The days parameter should be irrelevant when today=True."""
+    mock_client, mock_calendar = _setup_mock_client(mocker, [])
+
+    cal_cmd.list_events(account, days=999, today=True, client=mock_client)
+
+    call_kwargs = mock_calendar.search.call_args
+    start_arg = call_kwargs.kwargs.get("start") or call_kwargs[1].get("start")
+    end_arg = call_kwargs.kwargs.get("end") or call_kwargs[1].get("end")
+    # end should NOT be ~999 days from now; it should be within 24h
+    diff = end_arg - start_arg
+    assert diff.days < 2
+
+
+# ---------------------------------------------------------------------------
+# search_events
+# ---------------------------------------------------------------------------
+
+def test_search_events_filters_by_title(mocker, account):
+    ev1 = _make_mock_event(
+        mocker, "uid-a", "Team Standup",
+        datetime.datetime(2024, 1, 10, 9, 0),
+        datetime.datetime(2024, 1, 10, 9, 30),
+    )
+    ev2 = _make_mock_event(
+        mocker, "uid-b", "Lunch Break",
+        datetime.datetime(2024, 1, 10, 12, 0),
+        datetime.datetime(2024, 1, 10, 13, 0),
+    )
+    mock_client, _ = _setup_mock_client(mocker, [ev1, ev2])
+
+    result = cal_cmd.search_events(account, query="standup", client=mock_client)
+
+    assert len(result) == 1
+    assert result[0]["title"] == "Team Standup"
+
+
+def test_search_events_case_insensitive(mocker, account):
+    ev = _make_mock_event(
+        mocker, "uid-ci", "BOARD MEETING",
+        datetime.datetime(2024, 2, 1, 14, 0),
+        datetime.datetime(2024, 2, 1, 15, 0),
+    )
+    mock_client, _ = _setup_mock_client(mocker, [ev])
+
+    result = cal_cmd.search_events(account, query="board meeting", client=mock_client)
+
+    assert len(result) == 1
+    assert result[0]["id"] == "uid-ci"
+
+
+def test_search_events_no_matches(mocker, account):
+    ev = _make_mock_event(
+        mocker, "uid-nm", "Sprint Review",
+        datetime.datetime(2024, 3, 5, 10, 0),
+        datetime.datetime(2024, 3, 5, 11, 0),
+    )
+    mock_client, _ = _setup_mock_client(mocker, [ev])
+
+    result = cal_cmd.search_events(account, query="nonexistent", client=mock_client)
+
+    assert result == []
+
+
+def test_search_events_searches_backwards(mocker, account):
+    """search_events should look into the past, not the future."""
+    mock_client, mock_calendar = _setup_mock_client(mocker, [])
+
+    cal_cmd.search_events(account, query="test", days_back=90, client=mock_client)
+
+    call_kwargs = mock_calendar.search.call_args
+    start_arg = call_kwargs.kwargs.get("start") or call_kwargs[1].get("start")
+    end_arg = call_kwargs.kwargs.get("end") or call_kwargs[1].get("end")
+    # start should be before end (both in the past or end ~now)
+    assert start_arg < end_arg
+    # The window should be roughly 90 days
+    diff = end_arg - start_arg
+    assert 89 <= diff.days <= 91

@@ -457,7 +457,7 @@ def test_calendar_list_all_accounts(tmp_path, monkeypatch, mocker):
     config_file.write_text(MULTI_ACCOUNT_CONFIG)
     monkeypatch.setenv("FMCLI_CONFIG", str(config_file))
 
-    def fake_list_events(acc, days=30):
+    def fake_list_events(acc, days=30, today=False):
         if acc.name == "personal":
             return [{"id": "uid-p1", "title": "Personal Event",
                      "start": "2024-01-15T10:00:00", "end": "2024-01-15T11:00:00",

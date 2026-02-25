@@ -222,7 +222,7 @@ def test_email_send_draft_only(tmp_path, monkeypatch, mocker):
         'token = "abc123secret"\n'
     )
     monkeypatch.setenv("FMCLI_CONFIG", str(config_file))
-    mocker.patch("fmcli.commands.email.send_email", return_value={"id": "draft-id-999", "message_id": "test-msg-id@example"})
+    mocker.patch("fmcli.commands.email.send_email", return_value="draft-id-999")
     mock_run = mocker.patch("subprocess.run")
     result = runner.invoke(
         app,
@@ -247,7 +247,7 @@ def test_email_send_can_send(tmp_path, monkeypatch, mocker):
         'can_send = true\n'
     )
     monkeypatch.setenv("FMCLI_CONFIG", str(config_file))
-    mocker.patch("fmcli.commands.email.send_email", return_value={"id": "sent-id-999", "message_id": ""})
+    mocker.patch("fmcli.commands.email.send_email", return_value="sent-id-999")
     result = runner.invoke(
         app,
         ["email", "send", "--to", "bob@example.com", "--subject", "Hi", "--body", "Hello Bob"],

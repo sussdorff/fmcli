@@ -28,8 +28,8 @@ app.add_typer(files_app, name="files")
 ACCOUNT_OPTION = typer.Option(None, "--account", "-a", help="Account name (or FMC_ACCOUNT env var)")
 
 
-def _open_mail_draft(account_email: str, message_id: str) -> None:
-    """Open a specific draft in Mail.app by matching account email and RFC Message-ID."""
+def _open_mail_drafts(account_email: str) -> None:
+    """Open Mail.app Drafts folder for the account matching account_email."""
     import subprocess
     import sys
 
@@ -50,26 +50,12 @@ def _open_mail_draft(account_email: str, message_id: str) -> None:
             end repeat
             if targetAccount is not missing value then exit repeat
         end repeat
-        if targetAccount is missing value then return "account not found"
-        set draftBox to mailbox "Drafts" of targetAccount
-        -- Wait for Mail.app to sync the new draft
-        set maxRetries to 10
-        repeat maxRetries times
-            set draftMsgs to every message of draftBox
-            repeat with m in draftMsgs
-                if message id of m is "{message_id}" then
-                    open m
-                    return "opened"
-                end if
-            end repeat
-            delay 1
-        end repeat
-        -- Fallback: just show Drafts folder
-        set selected mailboxes of message viewer 1 to {{draftBox}}
-        return "fallback"
+        if targetAccount is not missing value then
+            set selected mailboxes of message viewer 1 to {{mailbox "Drafts" of targetAccount}}
+        end if
     end tell
     '''
-    typer.echo("Opening draft in Mail.app...")
+    typer.echo("Opening Drafts in Mail.app...")
     subprocess.run(["osascript", "-e", script], capture_output=True)
 
 
@@ -213,13 +199,12 @@ def email_send(
     from fmcli.commands.email import send_email
 
     acc = resolve_account(account)
-    result = send_email(acc, to=to, subject=subject, body=body)
-    email_id = result["id"]
+    email_id = send_email(acc, to=to, subject=subject, body=body)
     if acc.can_send:
         typer.echo(f"Email sent. ID: {email_id}")
     else:
         typer.echo(f"Draft created. ID: {email_id}")
-        _open_mail_draft(acc.email, result["message_id"])
+        _open_mail_drafts(acc.email)
 
 
 @email_app.command("reply")
@@ -233,16 +218,15 @@ def email_reply(
 
     acc = resolve_account(account)
     try:
-        result = reply_email(acc, email_id=email_id, body=body)
+        reply_id = reply_email(acc, email_id=email_id, body=body)
     except ValueError as err:
         typer.echo(f"Error: {err}", err=True)
         raise typer.Exit(1)
-    reply_id = result["id"]
     if acc.can_send:
         typer.echo(f"Reply sent. ID: {reply_id}")
     else:
         typer.echo(f"Reply draft created. ID: {reply_id}")
-        _open_mail_draft(acc.email, result["message_id"])
+        _open_mail_drafts(acc.email)
 
 
 # ---------------------------------------------------------------------------

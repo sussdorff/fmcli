@@ -47,6 +47,14 @@ def _get_identity(client: Any, account_email: str) -> Any:
     raise RuntimeError("No identity found for account")
 
 
+def _get_drafts_mailbox_id(client: Any) -> str:
+    resp = client.request(m.MailboxGet(ids=None))
+    for mb in resp.data:
+        if mb.role == "drafts":
+            return mb.id
+    raise RuntimeError("No Drafts mailbox found")
+
+
 def list_emails(account: Account, limit: int = 20, client: Any = None) -> list[dict]:
     c = _get_client(account, client)
     query_resp = c.request(m.EmailQuery(limit=limit))
@@ -108,6 +116,33 @@ def read_email(account: Account, email_id: str, client: Any = None) -> dict:
     return result
 
 
+def create_draft(
+    account: Account,
+    to: str,
+    subject: str,
+    body: str,
+    client: Any = None,
+    in_reply_to: list[str] | None = None,
+) -> str:
+    """Create an email draft without sending. Returns the email ID."""
+    c = _get_client(account, client)
+    drafts_id = _get_drafts_mailbox_id(c)
+    draft = jmapc.Email(
+        mail_from=[jmapc.EmailAddress(email=account.email, name=None)],
+        to=[jmapc.EmailAddress(email=to, name=None)],
+        subject=subject,
+        mailbox_ids={drafts_id: True},
+        keywords={"$draft": True},
+        in_reply_to=in_reply_to,
+        body_values={"body": jmapc.EmailBodyValue(value=body, is_encoding_problem=False, is_truncated=False)},
+        text_body=[jmapc.EmailBodyPart(part_id="body", type="text/plain")],
+    )
+    resp = c.request(m.EmailSet(create={"draft1": draft}))
+    if not resp.created:
+        raise RuntimeError(f"Failed to create email draft: {resp.not_created}")
+    return resp.created["draft1"].id
+
+
 def send_email(
     account: Account,
     to: str,
@@ -115,6 +150,9 @@ def send_email(
     body: str,
     client: Any = None,
 ) -> str:
+    if not account.can_send:
+        return create_draft(account, to=to, subject=subject, body=body, client=client)
+
     c = _get_client(account, client)
     identity = _get_identity(c, account.email)
 
@@ -167,6 +205,16 @@ def reply_email(account: Account, email_id: str, body: str, client: Any = None) 
         reply_subject = f"Re: {reply_subject}"
 
     in_reply_to = original.message_id or []
+
+    if not account.can_send:
+        return create_draft(
+            account,
+            to=reply_to_email,
+            subject=reply_subject,
+            body=body,
+            client=c,
+            in_reply_to=in_reply_to,
+        )
 
     identity = _get_identity(c, account.email)
 

@@ -21,6 +21,7 @@ class Account:
     email: str
     token: str
     app_password: str | None = None
+    can_send: bool = False
 
     @classmethod
     def from_config(cls, acc: AccountConfig) -> "Account":
@@ -29,6 +30,7 @@ class Account:
             email=acc.email,
             token=acc.token,
             app_password=acc.app_password,
+            can_send=acc.can_send,
         )
 
     def _dav_password(self) -> str:

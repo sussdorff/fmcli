@@ -35,6 +35,18 @@ def test_from_config(acc_config: AccountConfig) -> None:
     assert account.email == "user@fastmail.com"
     assert account.token == "tok123"
     assert account.app_password == "apppass"
+    assert account.can_send is False
+
+
+def test_from_config_can_send() -> None:
+    config = AccountConfig(
+        name="bot",
+        email="bot@fastmail.com",
+        token="bottok",
+        can_send=True,
+    )
+    account = Account.from_config(config)
+    assert account.can_send is True
 
 
 def test_get_jmap_client_returns_client(acc_config: AccountConfig, mocker) -> None:

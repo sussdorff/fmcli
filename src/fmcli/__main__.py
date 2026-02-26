@@ -516,6 +516,28 @@ def contacts_delete(
     typer.echo(f"Deleted contact {uid}.")
 
 
+@contacts_app.command("export-icloud")
+def contacts_export_icloud(
+    output_dir: str = typer.Option("./icloud-export", "--output-dir", "-o", help="Directory to save vCard files"),
+    fmt: str = typer.Option("individual", "--format", "-f", help="Output format: 'multi' (one .vcf) or 'individual' (one .vcf per contact)"),
+    emails_file: str = typer.Option("./icloud-export/emails.csv", "--emails-file", "-e", help="Path to save email list CSV"),
+) -> None:
+    """Export all contacts from Apple Contacts (iCloud) as vCards."""
+    from pathlib import Path
+
+    from fmcli.commands.icloud_export import export_icloud_contacts
+
+    try:
+        export_icloud_contacts(
+            output_dir=Path(output_dir),
+            fmt=fmt,
+            emails_file=Path(emails_file),
+        )
+    except RuntimeError as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1)
+
+
 # ---------------------------------------------------------------------------
 # Files commands
 # ---------------------------------------------------------------------------

@@ -70,15 +70,15 @@ def test_get_caldav_client_returns_client(acc_config: AccountConfig, mocker) -> 
 
 
 def test_get_carddav_client_returns_client(acc_config: AccountConfig, mocker) -> None:
-    mock_webdav = mocker.patch("fmcli.account.WebDAVClient")
+    mock_carddav = mocker.patch("fmcli.account.CardDAVClient")
     account = Account.from_config(acc_config)
     client = account.get_carddav_client()
-    mock_webdav.assert_called_once_with({
-        "webdav_hostname": "https://carddav.fastmail.com/dav/",
-        "webdav_login": "user@fastmail.com",
-        "webdav_password": "apppass",
-    })
-    assert client is mock_webdav.return_value
+    mock_carddav.assert_called_once_with(
+        url="https://carddav.fastmail.com/dav/",
+        username="user@fastmail.com",
+        password="apppass",
+    )
+    assert client is mock_carddav.return_value
 
 
 def test_get_webdav_client_returns_client(acc_config: AccountConfig, mocker) -> None:
@@ -105,6 +105,7 @@ def test_client_injection(acc_config: AccountConfig) -> None:
 def test_app_password_fallback(acc_config_no_apppass: AccountConfig, mocker) -> None:
     mock_dav = mocker.patch("fmcli.account.caldav.DAVClient")
     mock_webdav = mocker.patch("fmcli.account.WebDAVClient")
+    mock_carddav = mocker.patch("fmcli.account.CardDAVClient")
     account = Account.from_config(acc_config_no_apppass)
 
     account.get_caldav_client()
@@ -115,11 +116,11 @@ def test_app_password_fallback(acc_config_no_apppass: AccountConfig, mocker) -> 
     )
 
     account.get_carddav_client()
-    mock_webdav.assert_called_once_with({
-        "webdav_hostname": "https://carddav.fastmail.com/dav/",
-        "webdav_login": "user@fastmail.com",
-        "webdav_password": "tok123",
-    })
+    mock_carddav.assert_called_once_with(
+        url="https://carddav.fastmail.com/dav/",
+        username="user@fastmail.com",
+        password="tok123",
+    )
 
     account.get_webdav_client()
     mock_webdav.assert_called_with({

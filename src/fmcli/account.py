@@ -7,6 +7,7 @@ import jmapc
 import caldav
 from webdav3.client import Client as WebDAVClient
 
+from fmcli.carddav import CardDAVClient
 from fmcli.config import AccountConfig
 
 JMAP_HOST = "api.fastmail.com"
@@ -58,14 +59,14 @@ class Account:
             password=self._dav_password(),
         )
 
-    def get_carddav_client(self, client: Any = None) -> WebDAVClient:
+    def get_carddav_client(self, client: Any = None) -> CardDAVClient:
         if client is not None:
             return client
-        return WebDAVClient({
-            "webdav_hostname": CARDDAV_URL,
-            "webdav_login": self._dav_username(),
-            "webdav_password": self._dav_password(),
-        })
+        return CardDAVClient(
+            url=CARDDAV_URL,
+            username=self._dav_username(),
+            password=self._dav_password(),
+        )
 
     def get_webdav_client(self, client: Any = None) -> WebDAVClient:
         if client is not None:

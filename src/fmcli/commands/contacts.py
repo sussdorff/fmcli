@@ -1,21 +1,41 @@
 from __future__ import annotations
 
-import tempfile
 import uuid
-from pathlib import Path
 from typing import Any
 
+import vobject
+
 from fmcli.account import Account
+from fmcli.carddav import CardDAVClient
 
-CONTACTS_PATH = "/"
 
-
-def _get_client(account: Account, client: Any = None) -> Any:
+def _get_client(account: Account, client: Any = None) -> CardDAVClient:
     return client if client is not None else account.get_carddav_client()
 
 
-def _parse_vcard(content: str) -> dict:
-    """Parse a simple vCard string into a dict with id, name, email, phone."""
+def _parse_vcard(vcard_text: str) -> dict[str, str]:
+    """Parse a vCard string into a dict with id, name, email, phone using vobject."""
+    result: dict[str, str] = {"id": "", "name": "", "email": "", "phone": ""}
+    try:
+        card = vobject.readOne(vcard_text)
+    except Exception:
+        # Fallback to simple line-based parsing if vobject fails
+        return _parse_vcard_simple(vcard_text)
+
+    if hasattr(card, "uid"):
+        result["id"] = card.uid.value
+    if hasattr(card, "fn"):
+        result["name"] = card.fn.value
+    if hasattr(card, "email"):
+        result["email"] = card.email.value
+    if hasattr(card, "tel"):
+        result["phone"] = card.tel.value
+
+    return result
+
+
+def _parse_vcard_simple(content: str) -> dict[str, str]:
+    """Fallback simple line-based vCard parser."""
     result: dict[str, str] = {"id": "", "name": "", "email": "", "phone": ""}
     for line in content.splitlines():
         if line.startswith("UID:"):
@@ -30,48 +50,60 @@ def _parse_vcard(content: str) -> dict:
 
 
 def _make_vcard(uid: str, name: str, email: str, phone: str = "") -> str:
-    """Build a minimal vCard 3.0 string."""
-    lines = [
-        "BEGIN:VCARD",
-        "VERSION:3.0",
-        f"UID:{uid}",
-        f"FN:{name}",
-    ]
+    """Build a vCard 3.0 string using vobject."""
+    card = vobject.vCard()
+    card.add("uid").value = uid
+    card.add("fn").value = name
+    card.add("n").value = vobject.vcard.Name(family="", given=name)
     if email:
-        lines.append(f"EMAIL:{email}")
+        card.add("email").value = email
     if phone:
-        lines.append(f"TEL:{phone}")
-    lines.append("END:VCARD")
-    return "\r\n".join(lines)
+        card.add("tel").value = phone
+    return card.serialize()
 
 
-def _download_vcard(client: Any, path: str) -> str:
-    """Download a vCard from a remote path and return its content as a string."""
-    with tempfile.NamedTemporaryFile(suffix=".vcf", delete=False) as f:
-        tmp = f.name
-    client.download_sync(remote_path=path, local_path=tmp)
-    content = Path(tmp).read_text()
-    Path(tmp).unlink(missing_ok=True)
-    return content
+def _update_vcard(
+    vcard_text: str,
+    name: str | None = None,
+    email: str | None = None,
+    phone: str | None = None,
+) -> str:
+    """Parse an existing vCard, update specified fields, return serialized vCard."""
+    card = vobject.readOne(vcard_text)
 
+    if name is not None:
+        if hasattr(card, "fn"):
+            card.fn.value = name
+        else:
+            card.add("fn").value = name
+        if hasattr(card, "n"):
+            card.n.value = vobject.vcard.Name(family="", given=name)
 
-def _find_path_for_uid(client: Any, uid: str) -> str | None:
-    """Return the remote path for a given UID, or None if not found."""
-    paths = client.list(CONTACTS_PATH)
-    for path in paths:
-        if path.endswith(".vcf") and uid in path:
-            return path
-    return None
+    if email is not None:
+        if hasattr(card, "email"):
+            card.email.value = email
+        else:
+            card.add("email").value = email
+
+    if phone is not None:
+        if hasattr(card, "tel"):
+            card.tel.value = phone
+        elif phone:
+            card.add("tel").value = phone
+
+    return card.serialize()
 
 
 def list_contacts(account: Account, client: Any = None) -> list[dict]:
     """Return all contacts as a list of dicts with id, name, email, phone."""
     c = _get_client(account, client)
-    paths = [p for p in c.list(CONTACTS_PATH) if p.endswith(".vcf")]
+    raw_contacts = c.list_contacts()
     contacts = []
-    for path in paths:
-        content = _download_vcard(c, path)
-        contacts.append(_parse_vcard(content))
+    for entry in raw_contacts:
+        parsed = _parse_vcard(entry["vcard"])
+        parsed["href"] = entry.get("href", "")
+        parsed["etag"] = entry.get("etag", "")
+        contacts.append(parsed)
     return contacts
 
 
@@ -95,15 +127,8 @@ def create_contact(
     """Create a new contact and return the generated UID."""
     c = _get_client(account, client)
     uid = str(uuid.uuid4())
-    content = _make_vcard(uid=uid, name=name, email=email, phone=phone)
-
-    with tempfile.NamedTemporaryFile(suffix=".vcf", delete=False, mode="w") as f:
-        f.write(content)
-        tmp = f.name
-
-    remote_path = f"{uid}.vcf"
-    c.upload_sync(remote_path=remote_path, local_path=tmp)
-    Path(tmp).unlink(missing_ok=True)
+    vcard_text = _make_vcard(uid=uid, name=name, email=email, phone=phone)
+    c.create_contact(vcard_text=vcard_text, uid=uid)
     return uid
 
 
@@ -117,31 +142,39 @@ def update_contact(
 ) -> None:
     """Update an existing contact identified by uid. Only provided fields are changed."""
     c = _get_client(account, client)
-    remote_path = _find_path_for_uid(c, uid)
-    if remote_path is None:
+
+    # Find the contact by UID
+    raw_contacts = c.list_contacts()
+    target = None
+    for entry in raw_contacts:
+        parsed = _parse_vcard(entry["vcard"])
+        if parsed["id"] == uid:
+            target = entry
+            break
+
+    if target is None:
         raise ValueError(f"Contact not found: {uid}")
 
-    content = _download_vcard(c, remote_path)
-    existing = _parse_vcard(content)
-
-    new_name = name if name is not None else existing["name"]
-    new_email = email if email is not None else existing["email"]
-    new_phone = phone if phone is not None else existing["phone"]
-
-    new_content = _make_vcard(uid=uid, name=new_name, email=new_email, phone=new_phone)
-
-    with tempfile.NamedTemporaryFile(suffix=".vcf", delete=False, mode="w") as f:
-        f.write(new_content)
-        tmp = f.name
-
-    c.upload_sync(remote_path=remote_path, local_path=tmp)
-    Path(tmp).unlink(missing_ok=True)
+    updated_vcard = _update_vcard(
+        target["vcard"], name=name, email=email, phone=phone
+    )
+    c.update_contact(href=target["href"], vcard_text=updated_vcard)
 
 
 def delete_contact(account: Account, uid: str, client: Any = None) -> None:
     """Delete the contact identified by uid. Raises ValueError if not found."""
     c = _get_client(account, client)
-    remote_path = _find_path_for_uid(c, uid)
-    if remote_path is None:
+
+    # Find the contact by UID
+    raw_contacts = c.list_contacts()
+    target = None
+    for entry in raw_contacts:
+        parsed = _parse_vcard(entry["vcard"])
+        if parsed["id"] == uid:
+            target = entry
+            break
+
+    if target is None:
         raise ValueError(f"Contact not found: {uid}")
-    c.clean(remote_path)
+
+    c.delete_contact(href=target["href"])

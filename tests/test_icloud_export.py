@@ -244,6 +244,7 @@ class TestRunApplescriptBatch:
 # ---------------------------------------------------------------------------
 
 
+@patch("fmcli.commands.icloud_export.sys.platform", "darwin")
 class TestExportIcloudContacts:
     @patch("fmcli.commands.icloud_export.subprocess.run")
     def test_creates_output_dir(self, mock_run: MagicMock, tmp_path: Path) -> None:

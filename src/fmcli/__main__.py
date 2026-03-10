@@ -184,8 +184,36 @@ def email_read(
     typer.echo(f"From:    {e.get('from', '')}")
     typer.echo(f"Date:    {e.get('date', '')}")
     typer.echo(f"Subject: {e.get('subject', '')}")
+    attachments = e.get("attachments", [])
+    if attachments:
+        typer.echo(f"Attach:  {len(attachments)} file(s)")
+        for i, att in enumerate(attachments):
+            size_kb = att.get("size", 0) / 1024
+            typer.echo(f"  [{i}] {att.get('name', '?')}  ({size_kb:.1f} KB, {att.get('type', '?')})")
     typer.echo("")
     typer.echo(e.get("body", ""))
+
+
+@email_app.command("attachment")
+def email_attachment(
+    email_id: str = typer.Argument(..., help="Email ID"),
+    filename: Optional[str] = typer.Option(None, "--name", "-n", help="Attachment filename to download"),
+    index: Optional[int] = typer.Option(None, "--index", "-i", help="Attachment index (0-based)"),
+    output_dir: str = typer.Option(".", "--output", "-o", help="Output directory"),
+    account: Optional[str] = ACCOUNT_OPTION,
+) -> None:
+    """Download an email attachment."""
+    from fmcli.commands.email import download_attachment
+
+    acc = resolve_account(account)
+    try:
+        path = download_attachment(
+            acc, email_id=email_id, filename=filename, index=index, output_dir=output_dir
+        )
+    except ValueError as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"Saved: {path}")
 
 
 @email_app.command("send")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import jmapc
@@ -136,6 +137,7 @@ def read_email(account: Account, email_id: str, client: Any = None) -> dict:
                 "bodyValues",
                 "messageId",
                 "inReplyTo",
+                "attachments",
             ],
             fetch_text_body_values=True,
         )
@@ -145,7 +147,64 @@ def read_email(account: Account, email_id: str, client: Any = None) -> dict:
     email = get_resp.data[0]
     result = _email_to_dict(email)
     result["body"] = _get_body(email)
+    result["attachments"] = _get_attachments(email)
     return result
+
+
+def _get_attachments(email: Any) -> list[dict]:
+    if not email.attachments:
+        return []
+    return [
+        {
+            "name": att.name or "(unnamed)",
+            "type": att.type or "application/octet-stream",
+            "size": att.size or 0,
+            "blob_id": att.blob_id,
+            "part_id": att.part_id,
+        }
+        for att in email.attachments
+    ]
+
+
+def download_attachment(
+    account: Account,
+    email_id: str,
+    filename: str | None = None,
+    index: int | None = None,
+    output_dir: str = ".",
+    client: Any = None,
+) -> Path:
+    """Download an attachment by filename or index (0-based). Returns the saved path."""
+    c = _get_client(account, client)
+    get_resp = c.request(
+        m.EmailGet(
+            ids=[email_id],
+            properties=["attachments"],
+        )
+    )
+    if not get_resp.data:
+        raise ValueError(f"Email {email_id!r} not found")
+    email = get_resp.data[0]
+    if not email.attachments:
+        raise ValueError("Email has no attachments")
+
+    if filename:
+        attachment = next((a for a in email.attachments if a.name == filename), None)
+        if attachment is None:
+            names = [a.name or "(unnamed)" for a in email.attachments]
+            raise ValueError(f"Attachment {filename!r} not found. Available: {names}. Use --index to select by position.")
+    elif index is not None:
+        n = len(email.attachments)
+        if index < 0 or index >= n:
+            raise ValueError(f"Index {index} out of range (0-{n - 1})")
+        attachment = email.attachments[index]
+    else:
+        attachment = email.attachments[0]
+
+    out_name = attachment.name or f"attachment_{attachment.blob_id}"
+    dest = Path(output_dir) / out_name
+    c.download_attachment(attachment, dest)
+    return dest
 
 
 def create_draft(

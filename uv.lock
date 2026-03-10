@@ -318,7 +318,7 @@ wheels = [
 
 [[package]]
 name = "fmcli"
-version = "0.1.0"
+version = "0.0.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "caldav" },
@@ -331,7 +331,7 @@ dependencies = [
     { name = "webdavclient3" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -344,15 +344,18 @@ requires-dist = [
     { name = "defusedxml", specifier = ">=0.7.0" },
     { name = "jmapc", specifier = ">=0.2.0" },
     { name = "lxml", specifier = ">=5.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
-    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.12" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "typer", extras = ["all"], specifier = ">=0.12.0" },
     { name = "vobject", specifier = ">=0.9.9" },
     { name = "webdavclient3", specifier = ">=3.14.6" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-cov", specifier = ">=5.0" },
+    { name = "pytest-mock", specifier = ">=3.12" },
+]
 
 [[package]]
 name = "h11"

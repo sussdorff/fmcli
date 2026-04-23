@@ -345,7 +345,7 @@ requires-dist = [
     { name = "jmapc", specifier = ">=0.2.0" },
     { name = "lxml", specifier = ">=5.0" },
     { name = "requests", specifier = ">=2.31.0" },
-    { name = "typer", extras = ["all"], specifier = ">=0.12.0" },
+    { name = "typer", specifier = ">=0.12.0" },
     { name = "vobject", specifier = ">=0.9.9" },
     { name = "webdavclient3", specifier = ">=3.14.6" },
 ]

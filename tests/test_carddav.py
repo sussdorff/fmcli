@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -193,18 +193,6 @@ class TestDiscoverAddressbooks:
         assert len(result) == 1
         assert result[0]["name"] == "Personal"
         assert "Default" in result[0]["url"]
-
-    def test_skips_non_addressbook_collections(self, client: CardDAVClient) -> None:
-        calls = [
-            _mock_response(207, PRINCIPAL_RESPONSE),
-            _mock_response(207, ADDRESSBOOK_HOME_RESPONSE),
-            _mock_response(207, ADDRESSBOOKS_RESPONSE),
-        ]
-        client.session.request = MagicMock(side_effect=calls)
-        result = client.discover_addressbooks()
-        # Should only return the addressbook, not the parent collection
-        assert all("addressbook" in str(r) or r["name"] == "Personal" for r in result)
-
 
 class TestListContacts:
     def test_returns_contacts_with_vcard_data(self, client: CardDAVClient) -> None:

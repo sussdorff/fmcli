@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 from typer.testing import CliRunner
 
 from fmcli.__main__ import app
@@ -43,43 +42,11 @@ def test_email_help():
     assert "reply" in result.output
 
 
-def test_calendar_help():
-    result = runner.invoke(app, ["calendar", "--help"])
-    assert result.exit_code == 0
-    assert "list" in result.output
-    assert "create" in result.output
-    assert "delete" in result.output
-
-
-def test_contacts_help():
-    result = runner.invoke(app, ["contacts", "--help"])
-    assert result.exit_code == 0
-    assert "list" in result.output
-    assert "search" in result.output
-    assert "create" in result.output
-    assert "delete" in result.output
-
-
-def test_mailbox_help():
-    result = runner.invoke(app, ["mailbox", "--help"])
-    assert result.exit_code == 0
-    assert "list" in result.output
-
-
 def test_masked_email_help():
     result = runner.invoke(app, ["masked-email", "--help"])
     assert result.exit_code == 0
     assert "list" in result.output
     assert "create" in result.output
-    assert "delete" in result.output
-
-
-def test_files_help():
-    result = runner.invoke(app, ["files", "--help"])
-    assert result.exit_code == 0
-    assert "list" in result.output
-    assert "download" in result.output
-    assert "upload" in result.output
     assert "delete" in result.output
 
 

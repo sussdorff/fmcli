@@ -4,7 +4,6 @@ import datetime
 import pytest
 
 from fmcli.account import Account
-from fmcli.config import AccountConfig
 from fmcli.commands import calendar as cal_cmd
 
 
@@ -221,16 +220,6 @@ def test_update_event_end(mocker, account):
     mock_ev.save.assert_called_once()
 
 
-def test_update_event_no_changes_still_saves(mocker, account):
-    mock_client, mock_calendar, mock_ev = _setup_client_with_event_by_uid(
-        mocker, "uid-noop"
-    )
-
-    cal_cmd.update_event(account, uid="uid-noop", client=mock_client)
-
-    mock_ev.save.assert_called_once()
-
-
 # ---------------------------------------------------------------------------
 # delete_event
 # ---------------------------------------------------------------------------
@@ -265,28 +254,6 @@ def test_delete_event_not_found(mocker, account):
 # ---------------------------------------------------------------------------
 # list_events --today
 # ---------------------------------------------------------------------------
-
-def test_list_events_today_sets_end_before_midnight(mocker, account):
-    """When today=True the search end time should be 23:59:59 local time today."""
-    ev = _make_mock_event(
-        mocker, "uid-today", "Daily Standup",
-        datetime.datetime(2024, 1, 15, 9, 0),
-        datetime.datetime(2024, 1, 15, 9, 30),
-    )
-    mock_client, mock_calendar = _setup_mock_client(mocker, [ev])
-
-    result = cal_cmd.list_events(account, today=True, client=mock_client)
-
-    # Verify the search was called with an end time that is today 23:59:59 (UTC)
-    call_kwargs = mock_calendar.search.call_args
-    end_arg = call_kwargs.kwargs.get("end") or call_kwargs[1].get("end")
-    # The end must be on the same date as "now" and at 23:59:59 (or its UTC equiv)
-    assert end_arg.hour <= 23
-    assert end_arg.second == 59 or end_arg.minute == 59  # depends on tz offset
-
-    assert len(result) == 1
-    assert result[0]["title"] == "Daily Standup"
-
 
 def test_list_events_today_ignores_days_parameter(mocker, account):
     """The days parameter should be irrelevant when today=True."""

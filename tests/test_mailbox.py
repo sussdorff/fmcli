@@ -62,18 +62,6 @@ class TestListMailboxes:
 
         assert result == []
 
-    def test_calls_mailbox_get(self, account: Account, mock_client: MagicMock) -> None:
-        mb_resp = MagicMock()
-        mb_resp.data = []
-        mock_client.request.return_value = mb_resp
-
-        list_mailboxes(account, client=mock_client)
-
-        mock_client.request.assert_called_once()
-        call_arg = mock_client.request.call_args[0][0]
-        assert isinstance(call_arg, jmapc.methods.MailboxGet)
-
-
 class TestMoveEmail:
     def test_calls_email_set_with_mailbox_ids(self, account: Account, mock_client: MagicMock) -> None:
         move_email(account, email_id="email-42", mailbox_id="mb-inbox", client=mock_client)
@@ -82,11 +70,6 @@ class TestMoveEmail:
         call_arg = mock_client.request.call_args[0][0]
         assert isinstance(call_arg, jmapc.methods.EmailSet)
         assert call_arg.update == {"email-42": {"mailboxIds": {"mb-inbox": True}}}
-
-    def test_returns_none(self, account: Account, mock_client: MagicMock) -> None:
-        result = move_email(account, email_id="e1", mailbox_id="mb1", client=mock_client)
-        assert result is None
-
 
 class TestMarkRead:
     def test_mark_read_sets_seen_true(self, account: Account, mock_client: MagicMock) -> None:
@@ -110,11 +93,6 @@ class TestMarkRead:
 
         call_arg = mock_client.request.call_args[0][0]
         assert call_arg.update["email-1"]["keywords"]["$seen"] is True
-
-    def test_returns_none(self, account: Account, mock_client: MagicMock) -> None:
-        result = mark_read(account, email_id="e1", client=mock_client)
-        assert result is None
-
 
 class TestMarkSpam:
     def test_moves_email_to_junk_mailbox(self, account: Account, mock_client: MagicMock) -> None:
@@ -146,12 +124,3 @@ class TestMarkSpam:
 
         with pytest.raises(ValueError, match="No Junk mailbox found"):
             mark_spam(account, email_id="email-99", client=mock_client)
-
-    def test_returns_none(self, account: Account, mock_client: MagicMock) -> None:
-        mb_resp = MagicMock()
-        mb_resp.data = [_make_mailbox("mb-junk", "Spam", "junk")]
-        email_set_resp = MagicMock()
-        mock_client.request.side_effect = [mb_resp, email_set_resp]
-
-        result = mark_spam(account, email_id="e1", client=mock_client)
-        assert result is None

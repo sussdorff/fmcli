@@ -168,8 +168,11 @@ class TestRunApplescriptBatch:
             stderr="",
         )
 
-        _run_applescript_batch(start=1, count=10)
+        result = _run_applescript_batch(start=1, count=10)
 
+        assert len(result) == 1
+        assert result[0]["vcard"] == VCARD_JOHN
+        assert result[0]["emails"] == ["john@example.com"]
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
         assert args[0] == "osascript"

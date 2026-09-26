@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import pytest
 import jmapc
-import caldav
-from webdav3.client import Client as WebDAVClient
 
 from fmcli.config import AccountConfig
 from fmcli.account import Account

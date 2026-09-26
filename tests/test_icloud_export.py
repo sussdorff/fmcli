@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import csv
-import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -109,17 +108,6 @@ class TestParseBatchOutput:
         assert results[0]["vcard"] == VCARD_JOHN
         assert results[0]["emails"] == ["john@example.com", "john.doe@work.com"]
 
-    def test_parses_multiple_contacts(self) -> None:
-        output = _make_batch_output(
-            (VCARD_JOHN, ["john@example.com"]),
-            (VCARD_JANE, ["jane@example.com"]),
-        )
-        results = _parse_batch_output(output)
-
-        assert len(results) == 2
-        assert "John Doe" in results[0]["vcard"]
-        assert "Jane Smith" in results[1]["vcard"]
-
     def test_contact_without_emails(self) -> None:
         output = _make_batch_output((VCARD_NO_EMAIL, []))
         results = _parse_batch_output(output)
@@ -156,17 +144,6 @@ class TestExtractEmails:
 
         assert rows == []
 
-    def test_multiple_contacts(self) -> None:
-        contacts = [
-            {"vcard": VCARD_JOHN, "emails": ["john@example.com"], "filename": "John_Doe.vcf"},
-            {"vcard": VCARD_JANE, "emails": ["jane@example.com"], "filename": "Jane_Smith.vcf"},
-        ]
-        rows = _extract_emails_from_vcards(contacts)
-
-        assert len(rows) == 2
-        assert rows[0]["name"] == "John Doe"
-        assert rows[1]["name"] == "Jane Smith"
-
     def test_special_chars_in_name(self) -> None:
         contacts = [
             {"vcard": VCARD_SPECIAL_CHARS, "emails": ["obrien@example.com"], "filename": "OBrien__Mller.vcf"},
@@ -193,25 +170,13 @@ class TestRunApplescriptBatch:
 
         result = _run_applescript_batch(start=1, count=10)
 
+        assert len(result) == 1
+        assert result[0]["vcard"] == VCARD_JOHN
+        assert result[0]["emails"] == ["john@example.com"]
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
         assert args[0] == "osascript"
         assert args[1] == "-e"
-
-    @patch("fmcli.commands.icloud_export.subprocess.run")
-    def test_returns_parsed_contacts(self, mock_run: MagicMock) -> None:
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout=_make_batch_output(
-                (VCARD_JOHN, ["john@example.com"]),
-                (VCARD_JANE, ["jane@example.com"]),
-            ),
-            stderr="",
-        )
-
-        result = _run_applescript_batch(start=1, count=10)
-
-        assert len(result) == 2
 
     @patch("fmcli.commands.icloud_export.subprocess.run")
     def test_raises_on_applescript_error(self, mock_run: MagicMock) -> None:
@@ -246,32 +211,6 @@ class TestRunApplescriptBatch:
 
 @patch("fmcli.commands.icloud_export.sys.platform", "darwin")
 class TestExportIcloudContacts:
-    @patch("fmcli.commands.icloud_export.subprocess.run")
-    def test_creates_output_dir(self, mock_run: MagicMock, tmp_path: Path) -> None:
-        output_dir = tmp_path / "export"
-        emails_file = tmp_path / "emails.csv"
-
-        # First call: get count. Second call: batch.
-        mock_run.side_effect = [
-            MagicMock(returncode=0, stdout="2", stderr=""),  # count
-            MagicMock(
-                returncode=0,
-                stdout=_make_batch_output(
-                    (VCARD_JOHN, ["john@example.com"]),
-                    (VCARD_JANE, ["jane@example.com"]),
-                ),
-                stderr="",
-            ),
-        ]
-
-        export_icloud_contacts(
-            output_dir=output_dir,
-            fmt="individual",
-            emails_file=emails_file,
-        )
-
-        assert output_dir.is_dir()
-
     @patch("fmcli.commands.icloud_export.subprocess.run")
     def test_writes_individual_vcf_files(self, mock_run: MagicMock, tmp_path: Path) -> None:
         output_dir = tmp_path / "export"

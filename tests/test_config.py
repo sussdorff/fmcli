@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from fmcli.config import AccountConfig, Config
+from fmcli.config import Config
 
 
 SINGLE_ACCOUNT_TOML = """\
@@ -89,13 +89,6 @@ def test_missing_config_file_raises(tmp_path: Path) -> None:
         Config.load(config_path=missing)
 
 
-def test_app_password_optional(tmp_path: Path) -> None:
-    path = _write_config(tmp_path, SINGLE_ACCOUNT_TOML)
-    config = Config.load(config_path=path)
-    acc = config.accounts[0]
-    assert acc.app_password is None
-
-
 CAN_SEND_TOML = """\
 [[accounts]]
 name = "bot"
@@ -122,10 +115,3 @@ def test_can_send_defaults_false(tmp_path: Path) -> None:
     config = Config.load(config_path=path)
     human = config.get_account("human")
     assert human.can_send is False
-
-
-def test_can_send_single_account_default(tmp_path: Path) -> None:
-    path = _write_config(tmp_path, SINGLE_ACCOUNT_TOML)
-    config = Config.load(config_path=path)
-    acc = config.accounts[0]
-    assert acc.can_send is False

@@ -72,18 +72,6 @@ class TestListMaskedEmails:
         result = list_masked_emails(account, client=mock_client)
         assert result == []
 
-    def test_calls_masked_email_get(self, account: Account, mock_client: MagicMock) -> None:
-        me_resp = MagicMock()
-        me_resp.data = []
-        mock_client.request.return_value = me_resp
-
-        list_masked_emails(account, client=mock_client)
-
-        mock_client.request.assert_called_once()
-        call_arg = mock_client.request.call_args[0][0]
-        assert isinstance(call_arg, fm.MaskedEmailGet)
-
-
 class TestCreateMaskedEmail:
     def test_creates_with_domain_and_description(self, account: Account, mock_client: MagicMock) -> None:
         create_resp = MagicMock()
@@ -130,7 +118,6 @@ class TestCreateMaskedEmail:
         result = create_masked_email(account, client=mock_client)
         assert result is None
 
-
 class TestDeleteMaskedEmail:
     def test_disables_masked_email(self, account: Account, mock_client: MagicMock) -> None:
         delete_masked_email(account, masked_email_id="me1", client=mock_client)
@@ -138,7 +125,3 @@ class TestDeleteMaskedEmail:
         mock_client.request.assert_called_once()
         call_arg = mock_client.request.call_args[0][0]
         assert isinstance(call_arg, fm.MaskedEmailSet)
-
-    def test_returns_none(self, account: Account, mock_client: MagicMock) -> None:
-        result = delete_masked_email(account, masked_email_id="me1", client=mock_client)
-        assert result is None

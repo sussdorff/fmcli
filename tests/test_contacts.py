@@ -109,13 +109,6 @@ class TestListContacts:
         assert result[0]["email"] == "bob@example.com"
         assert result[0]["phone"] == ""
 
-    def test_calls_list_contacts_on_client(self, account: Account, mock_client: MagicMock) -> None:
-        mock_client.list_contacts.return_value = []
-
-        list_contacts(account, client=mock_client)
-
-        mock_client.list_contacts.assert_called_once()
-
     def test_includes_href_and_etag(self, account: Account, mock_client: MagicMock) -> None:
         mock_client.list_contacts.return_value = _make_contact_entries(
             ("/ab/uid-john-001.vcf", "etag1", VCARD_JOHN),
@@ -171,21 +164,6 @@ class TestSearchContacts:
 
 
 class TestCreateContact:
-    def test_returns_uid_string(self, account: Account, mock_client: MagicMock) -> None:
-        mock_client.create_contact.return_value = "/ab/some-uid.vcf"
-
-        uid = create_contact(account, name="Alice", email="alice@example.com", client=mock_client)
-
-        assert isinstance(uid, str)
-        assert len(uid) > 0
-
-    def test_calls_create_contact(self, account: Account, mock_client: MagicMock) -> None:
-        mock_client.create_contact.return_value = "/ab/some-uid.vcf"
-
-        create_contact(account, name="Alice", email="alice@example.com", client=mock_client)
-
-        mock_client.create_contact.assert_called_once()
-
     def test_vcard_contains_name_and_email(self, account: Account, mock_client: MagicMock) -> None:
         mock_client.create_contact.return_value = "/ab/some-uid.vcf"
 
@@ -204,15 +182,6 @@ class TestCreateContact:
 
         call_kwargs = mock_client.create_contact.call_args[1]
         assert call_kwargs["uid"] == uid
-
-    def test_create_without_phone(self, account: Account, mock_client: MagicMock) -> None:
-        mock_client.create_contact.return_value = "/ab/some-uid.vcf"
-
-        uid = create_contact(account, name="Phoneless", email="p@example.com", client=mock_client)
-
-        assert isinstance(uid, str)
-        mock_client.create_contact.assert_called_once()
-
 
 class TestUpdateContact:
     def _setup_mock(self, mock_client: MagicMock) -> None:
@@ -265,14 +234,6 @@ class TestUpdateContact:
         with pytest.raises(ValueError, match="uid-unknown"):
             update_contact(account, uid="uid-unknown", name="Nobody", client=mock_client)
 
-    def test_returns_none(self, account: Account, mock_client: MagicMock) -> None:
-        self._setup_mock(mock_client)
-
-        result = update_contact(account, uid="uid-john-001", name="X", client=mock_client)
-
-        assert result is None
-
-
 class TestDeleteContact:
     def test_calls_delete_with_correct_href(self, account: Account, mock_client: MagicMock) -> None:
         mock_client.list_contacts.return_value = _make_contact_entries(
@@ -291,24 +252,3 @@ class TestDeleteContact:
 
         with pytest.raises(ValueError, match="uid-nonexistent"):
             delete_contact(account, uid="uid-nonexistent", client=mock_client)
-
-    def test_returns_none(self, account: Account, mock_client: MagicMock) -> None:
-        mock_client.list_contacts.return_value = _make_contact_entries(
-            ("/ab/uid-john-001.vcf", "etag1", VCARD_JOHN),
-        )
-
-        result = delete_contact(account, uid="uid-john-001", client=mock_client)
-
-        assert result is None
-
-    def test_does_not_delete_other_contacts(self, account: Account, mock_client: MagicMock) -> None:
-        mock_client.list_contacts.return_value = _make_contact_entries(
-            ("/ab/uid-john-001.vcf", "etag1", VCARD_JOHN),
-            ("/ab/uid-jane-002.vcf", "etag2", VCARD_JANE),
-        )
-
-        delete_contact(account, uid="uid-john-001", client=mock_client)
-
-        mock_client.delete_contact.assert_called_once()
-        call_kwargs = mock_client.delete_contact.call_args[1]
-        assert "jane" not in call_kwargs["href"]

@@ -13,6 +13,7 @@ def _isolated_environment(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
     monkeypatch.setenv("XDG_STATE_HOME", str(home / ".local" / "state"))
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
+    monkeypatch.setenv("FMCLI_CONFIG", str(home / ".config" / "fmcli" / "config.toml"))
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))

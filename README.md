@@ -107,9 +107,13 @@ uv run pytest
 uv run pytest --cov=fmcli --cov-report=term-missing
 ```
 
+`scripts/dev/preflight.sh` runs the toolchain version check
+(`.agents/standards/toolchains/scripts/check_toolchain_versions.py`). The
+pre-push hook runs it, and CI runs the same check in its `toolchains` job.
+
 ## Stack
 
-- Python 3.11+, [UV](https://github.com/astral-sh/uv)
+- Python 3.14 or newer on its latest patch release, [uv](https://github.com/astral-sh/uv) on its latest release
 - [jmapc](https://github.com/smkent/jmapc) — JMAP email
 - [caldav](https://github.com/python-caldav/caldav) — CalDAV calendar
 - [webdavclient3](https://github.com/ezhov-evgeny/webdavclient3) — CardDAV contacts + WebDAV files

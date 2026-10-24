@@ -1,0 +1,5 @@
+[landing]
+# ccore pr merge squashes the branch into a new commit. The protected main
+# refuses it until the required checks pass on that commit, so wait for CI.
+wait_for_ci = true
+required_checks = ["quality", "toolchains"]

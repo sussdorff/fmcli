@@ -108,7 +108,7 @@ uv run pytest --cov=fmcli --cov-report=term-missing
 ```
 
 `scripts/dev/preflight.sh` runs the toolchain version check
-(`.agents/standards/toolchains/scripts/check_toolchain_versions.py`). The
+(`scripts/dev/check_toolchain_versions.py`). The
 pre-push hook runs it, and CI runs the same check in its `toolchains` job.
 
 ## Stack

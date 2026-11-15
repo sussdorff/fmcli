@@ -38,8 +38,9 @@ packages = ["src/fmcli"]
 testpaths = ["tests"]
 addopts = "-n auto --cov=fmcli --cov-report=term-missing"
 
-[tool.ruff]
-extend-exclude = [".agents", ".claude"]
-
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# Kept byte-identical to the toolchains check it was copied from.
+"scripts/dev/check_toolchain_versions.py" = ["E741"]
